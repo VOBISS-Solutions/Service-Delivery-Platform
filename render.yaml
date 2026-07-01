@@ -5,6 +5,7 @@ services:
     plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: HOST=0.0.0.0 python app.py
+    healthCheckPath: /api/health
     envVars:
       - key: TRACKER_PASSWORD
         sync: false

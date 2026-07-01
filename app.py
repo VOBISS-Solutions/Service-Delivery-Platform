@@ -542,6 +542,8 @@ class TrackerHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         query = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+        if path == "/api/health":
+            return json_response(self, {"ok": True})
         if path == "/login":
             return self.serve_static("/login.html", require_auth=False)
         if path == "/styles.css":
