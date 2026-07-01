@@ -4,7 +4,6 @@ import csv
 import io
 import json
 import os
-import sqlite3
 import uuid
 from datetime import date, datetime
 from http.cookies import SimpleCookie
@@ -19,9 +18,20 @@ except ImportError:  # pragma: no cover - import guard for clearer startup error
     Workbook = None
     load_workbook = None
 
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:  # pragma: no cover - local SQLite mode does not need psycopg
+    psycopg = None
+    dict_row = None
+
+import sqlite3
+
 
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("DATABASE_PATH", ROOT / "data" / "project_tracker.db"))
+DATABASE_URL = os.environ.get("DATABASE_URL")
+USING_POSTGRES = bool(DATABASE_URL)
 STATIC_DIR = ROOT / "static"
 APP_PASSWORD = os.environ.get("TRACKER_PASSWORD", "change-me")
 SESSIONS: set[str] = set()
@@ -121,7 +131,15 @@ HEADER_ALIASES = {
 }
 
 
-def connect() -> sqlite3.Connection:
+def sql(statement: str) -> str:
+    return statement.replace("?", "%s") if USING_POSTGRES else statement
+
+
+def connect():
+    if USING_POSTGRES:
+        if psycopg is None:
+            raise RuntimeError("psycopg is required when DATABASE_URL is set")
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
     DB_PATH.parent.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -130,41 +148,78 @@ def connect() -> sqlite3.Connection:
 
 def init_db() -> None:
     with connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS projects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id TEXT NOT NULL UNIQUE,
-                sn TEXT,
-                customer_name TEXT NOT NULL,
-                site_name TEXT NOT NULL,
-                location TEXT,
-                region TEXT,
-                capacity TEXT,
-                bandwidth REAL,
-                planned_adss_distance_m REAL,
-                planned_drop_distance_m REAL,
-                service_type TEXT,
-                cpe TEXT,
-                confirmation_date TEXT,
-                start_date TEXT,
-                target_completion_date TEXT,
-                completion_date TEXT,
-                status TEXT NOT NULL DEFAULT 'Planned',
-                remarks TEXT,
-                mrc REAL DEFAULT 0,
-                nrc REAL DEFAULT 0,
-                poles_9m REAL DEFAULT 0,
-                poles_11m REAL DEFAULT 0,
-                labour REAL DEFAULT 0,
-                trench REAL DEFAULT 0,
-                parent_project_id TEXT,
-                archived INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+        if USING_POSTGRES:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS projects (
+                    id SERIAL PRIMARY KEY,
+                    project_id TEXT NOT NULL UNIQUE,
+                    sn TEXT,
+                    customer_name TEXT NOT NULL,
+                    site_name TEXT NOT NULL,
+                    location TEXT,
+                    region TEXT,
+                    capacity TEXT,
+                    bandwidth DOUBLE PRECISION,
+                    planned_adss_distance_m DOUBLE PRECISION,
+                    planned_drop_distance_m DOUBLE PRECISION,
+                    service_type TEXT,
+                    cpe TEXT,
+                    confirmation_date TEXT,
+                    start_date TEXT,
+                    target_completion_date TEXT,
+                    completion_date TEXT,
+                    status TEXT NOT NULL DEFAULT 'Planned',
+                    remarks TEXT,
+                    mrc DOUBLE PRECISION DEFAULT 0,
+                    nrc DOUBLE PRECISION DEFAULT 0,
+                    poles_9m DOUBLE PRECISION DEFAULT 0,
+                    poles_11m DOUBLE PRECISION DEFAULT 0,
+                    labour DOUBLE PRECISION DEFAULT 0,
+                    trench DOUBLE PRECISION DEFAULT 0,
+                    parent_project_id TEXT,
+                    archived BOOLEAN DEFAULT FALSE,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
+        else:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS projects (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL UNIQUE,
+                    sn TEXT,
+                    customer_name TEXT NOT NULL,
+                    site_name TEXT NOT NULL,
+                    location TEXT,
+                    region TEXT,
+                    capacity TEXT,
+                    bandwidth REAL,
+                    planned_adss_distance_m REAL,
+                    planned_drop_distance_m REAL,
+                    service_type TEXT,
+                    cpe TEXT,
+                    confirmation_date TEXT,
+                    start_date TEXT,
+                    target_completion_date TEXT,
+                    completion_date TEXT,
+                    status TEXT NOT NULL DEFAULT 'Planned',
+                    remarks TEXT,
+                    mrc REAL DEFAULT 0,
+                    nrc REAL DEFAULT 0,
+                    poles_9m REAL DEFAULT 0,
+                    poles_11m REAL DEFAULT 0,
+                    labour REAL DEFAULT 0,
+                    trench REAL DEFAULT 0,
+                    parent_project_id TEXT,
+                    archived INTEGER DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)"
         )
@@ -309,7 +364,7 @@ def get_projects(query: dict) -> list[dict]:
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     with connect() as conn:
         rows = conn.execute(
-            f"SELECT * FROM projects {where} ORDER BY archived ASC, confirmation_date DESC, id DESC",
+            sql(f"SELECT * FROM projects {where} ORDER BY archived ASC, confirmation_date DESC, id DESC"),
             params,
         ).fetchall()
     return [row_to_project(row) for row in rows]
@@ -320,7 +375,7 @@ def save_project(payload: dict, project_pk: int | None = None) -> dict:
     existing = None
     if project_pk:
         with connect() as conn:
-            existing = conn.execute("SELECT * FROM projects WHERE id = ?", (project_pk,)).fetchone()
+            existing = conn.execute(sql("SELECT * FROM projects WHERE id = ?"), (project_pk,)).fetchone()
         if not existing:
             raise KeyError("Project not found")
 
@@ -331,22 +386,22 @@ def save_project(payload: dict, project_pk: int | None = None) -> dict:
         if project_pk:
             assignments = ", ".join([f"{field} = ?" for field in ["project_id"] + PROJECT_FIELDS] + ["updated_at = ?"])
             values = [data["project_id"]] + [data[field] for field in PROJECT_FIELDS] + [data["updated_at"], project_pk]
-            conn.execute(f"UPDATE projects SET {assignments} WHERE id = ?", values)
+            conn.execute(sql(f"UPDATE projects SET {assignments} WHERE id = ?"), values)
         else:
             data["created_at"] = now
             fields = ["project_id"] + PROJECT_FIELDS + ["created_at", "updated_at"]
             placeholders = ", ".join(["?"] * len(fields))
             conn.execute(
-                f"INSERT INTO projects ({', '.join(fields)}) VALUES ({placeholders})",
+                sql(f"INSERT INTO projects ({', '.join(fields)}) VALUES ({placeholders})"),
                 [data[field] for field in fields],
             )
-        row = conn.execute("SELECT * FROM projects WHERE project_id = ?", (data["project_id"],)).fetchone()
+        row = conn.execute(sql("SELECT * FROM projects WHERE project_id = ?"), (data["project_id"],)).fetchone()
     return row_to_project(row)
 
 
 def delete_project(project_pk: int) -> None:
     with connect() as conn:
-        conn.execute("DELETE FROM projects WHERE id = ?", (project_pk,))
+        conn.execute(sql("DELETE FROM projects WHERE id = ?"), (project_pk,))
 
 
 def summary() -> dict:
@@ -510,7 +565,7 @@ def import_workbook(file_bytes: bytes) -> dict:
                 project_id = payload.get("project_id")
                 existing = None
                 if project_id:
-                    existing = conn.execute("SELECT id FROM projects WHERE project_id = ?", (project_id,)).fetchone()
+                    existing = conn.execute(sql("SELECT id FROM projects WHERE project_id = ?"), (project_id,)).fetchone()
                 saved = save_project(payload, existing["id"] if existing else None)
                 updated += 1 if existing else 0
                 imported += 0 if existing else 1
