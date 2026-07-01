@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Service Delivery Tracker</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">SD</span>
+      <div>
+        <strong>Delivery Tracker</strong>
+        <span>Projects & deployment</span>
+      </div>
+    </div>
+    <nav>
+      <button class="nav-item active" data-view="dashboard">Dashboard</button>
+      <button class="nav-item" data-view="projects">Projects</button>
+      <button class="nav-item" data-view="analytics">Analytics</button>
+      <button class="nav-item" data-view="reports">Reports</button>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div>
+        <h1 id="viewTitle">Dashboard</h1>
+        <p id="viewSubtitle">Live project health, revenue, materials, and aging.</p>
+      </div>
+      <div class="top-actions">
+        <label class="import-btn">
+          Import Excel
+          <input id="importFile" type="file" accept=".xlsx,.xlsm">
+        </label>
+        <button id="exportBtn" class="primary">Export Excel</button>
+        <button id="newProjectBtn">New Project</button>
+        <button id="logoutBtn">Logout</button>
+      </div>
+    </header>
+
+    <section class="filters">
+      <input id="searchInput" placeholder="Search customer, site, remarks">
+      <select id="statusFilter"><option value="">All statuses</option></select>
+      <select id="regionFilter"><option value="">All regions</option></select>
+      <select id="serviceFilter"><option value="">All services</option></select>
+      <select id="archiveFilter">
+        <option value="">Active & archived</option>
+        <option value="0">Active only</option>
+        <option value="1">Archived only</option>
+      </select>
+      <input id="fromFilter" type="date" title="Confirmation date from">
+      <input id="toFilter" type="date" title="Confirmation date to">
+      <button id="clearFilters">Clear</button>
+    </section>
+
+    <section id="dashboard" class="view active">
+      <div class="metrics" id="metrics"></div>
+      <div class="dashboard-grid">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Aging</h2>
+            <span>Confirmed to delivery</span>
+          </div>
+          <div id="agingBars" class="bars"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Status</h2>
+            <span>Current workflow split</span>
+          </div>
+          <div id="statusBars" class="bars"></div>
+        </section>
+        <section class="panel wide">
+          <div class="panel-head">
+            <h2>Delayed Projects</h2>
+            <span>Past target completion date</span>
+          </div>
+          <div class="table-wrap compact">
+            <table>
+              <thead>
+                <tr><th>Project</th><th>Customer</th><th>Target</th><th>Status</th><th>Age</th></tr>
+              </thead>
+              <tbody id="delayedRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="projects" class="view">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>Customer / Site</th>
+              <th>Region</th>
+              <th>Service</th>
+              <th>Status</th>
+              <th>Target</th>
+              <th>Age</th>
+              <th>Revenue</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="projectRows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="analytics" class="view">
+      <div class="dashboard-grid">
+        <section class="panel">
+          <div class="panel-head"><h2>Revenue By Region</h2><span>MRC total</span></div>
+          <div id="regionRevenueBars" class="bars"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2>Service Mix</h2><span>Project count</span></div>
+          <div id="serviceBars" class="bars"></div>
+        </section>
+        <section class="panel wide">
+          <div class="panel-head"><h2>Planned Materials</h2><span>Totals across active and archived projects</span></div>
+          <div id="materialGrid" class="material-grid"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="reports" class="view">
+      <div class="report-grid">
+        <button data-report="customer_name">Customer Summary</button>
+        <button data-report="region">Region Summary</button>
+        <button data-report="service_type">Service Summary</button>
+        <button data-report="status">Status Summary</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Group</th><th>Projects</th><th>MRC</th><th>NRC</th><th>Delayed</th></tr></thead>
+          <tbody id="reportRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="projectDialog">
+    <form id="projectForm" method="dialog">
+      <div class="dialog-head">
+        <h2 id="dialogTitle">New Project</h2>
+        <button type="button" id="closeDialog" class="icon-btn">x</button>
+      </div>
+      <input type="hidden" id="projectDbId">
+      <div class="form-grid">
+        <label>Customer Name<input name="customer_name" required></label>
+        <label>Site Name<input name="site_name" required></label>
+        <label>SN<input name="sn"></label>
+        <label>Parent Project ID<input name="parent_project_id"></label>
+        <label>Location<input name="location"></label>
+        <label>Region<input name="region"></label>
+        <label>Capacity<input name="capacity"></label>
+        <label>Bandwidth<input name="bandwidth" type="number" step="0.01"></label>
+        <label>Service Type<input name="service_type"></label>
+        <label>CPE<input name="cpe"></label>
+        <label>Confirmation Date<input name="confirmation_date" type="date"></label>
+        <label>Start Date<input name="start_date" type="date"></label>
+        <label>Target Completion<input name="target_completion_date" type="date"></label>
+        <label>Completion Date<input name="completion_date" type="date"></label>
+        <label>Status<select name="status"></select></label>
+        <label>MRC<input name="mrc" type="number" step="0.01"></label>
+        <label>NRC<input name="nrc" type="number" step="0.01"></label>
+        <label>Planned ADSS (m)<input name="planned_adss_distance_m" type="number" step="0.01"></label>
+        <label>Planned Drop (m)<input name="planned_drop_distance_m" type="number" step="0.01"></label>
+        <label>9m Poles<input name="poles_9m" type="number" step="0.01"></label>
+        <label>11m Poles<input name="poles_11m" type="number" step="0.01"></label>
+        <label>Labour<input name="labour" type="number" step="0.01"></label>
+        <label>Trench<input name="trench" type="number" step="0.01"></label>
+        <label class="check"><input name="archived" type="checkbox"> Archived</label>
+        <label class="full">Remarks<textarea name="remarks" rows="3"></textarea></label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="deleteProject" class="danger">Delete</button>
+        <span></span>
+        <button type="button" id="cancelProject">Cancel</button>
+        <button class="primary" type="submit">Save Project</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

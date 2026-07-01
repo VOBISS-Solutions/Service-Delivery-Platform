@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Service Delivery Tracker",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "console": "integratedTerminal",
+      "python": "C:\\Users\\edmun_gn8edcx\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe"
+    }
+  ]
+}
