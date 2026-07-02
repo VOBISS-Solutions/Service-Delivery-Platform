@@ -520,14 +520,15 @@ def find_existing_project_id(conn, payload: dict):
     site_name = str(payload.get("site_name") or "").strip()
     confirmation_date = iso_date(payload.get("confirmation_date"))
     if customer_name and site_name:
+        date_clause = "(?::text IS NULL OR confirmation_date = ?)" if USING_POSTGRES else "(? IS NULL OR confirmation_date = ?)"
         existing = conn.execute(
             sql(
-                """
+                f"""
                 SELECT id
                 FROM projects
                 WHERE LOWER(TRIM(customer_name)) = LOWER(TRIM(?))
                   AND LOWER(TRIM(site_name)) = LOWER(TRIM(?))
-                  AND (? IS NULL OR confirmation_date = ?)
+                  AND {date_clause}
                 ORDER BY id DESC
                 LIMIT 1
                 """
