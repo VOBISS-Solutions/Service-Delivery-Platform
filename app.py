@@ -282,6 +282,11 @@ def normalize_bool(value) -> int:
     return 1 if str(value).strip().lower() in {"1", "yes", "true", "archived"} else 0
 
 
+def normalize_archived(value):
+    archived = bool(normalize_bool(value))
+    return archived if USING_POSTGRES else int(archived)
+
+
 def make_project_id() -> str:
     return f"PRJ-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:5].upper()}"
 
@@ -295,7 +300,7 @@ def normalize_project(payload: dict, existing_project_id: str | None = None) -> 
         elif field in DATE_FIELDS:
             data[field] = iso_date(value)
         elif field == "archived":
-            data[field] = normalize_bool(value)
+            data[field] = normalize_archived(value)
         else:
             data[field] = str(value).strip() if value not in (None, "") else None
 
