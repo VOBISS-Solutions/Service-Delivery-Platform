@@ -916,16 +916,19 @@ def seed_if_empty() -> None:
 
 
 def remove_demo_seed_data() -> None:
-    demo_pairs = [
-        ("Acme Fibre", "Airport Branch"),
-        ("Northstar Bank", "Kumasi DR Site"),
-    ]
+    demo_customers = ("acme fibre", "northstar bank")
+    demo_sites = ("airport branch", "kumasi dr site")
     with connect() as conn:
-        for customer_name, site_name in demo_pairs:
-            conn.execute(
-                sql("DELETE FROM projects WHERE customer_name = ? AND site_name = ?"),
-                (customer_name, site_name),
-            )
+        conn.execute(
+            sql(
+                """
+                DELETE FROM projects
+                WHERE LOWER(TRIM(customer_name)) IN (?, ?)
+                   OR LOWER(TRIM(site_name)) IN (?, ?)
+                """
+            ),
+            (*demo_customers, *demo_sites),
+        )
 
 
 def main() -> None:
