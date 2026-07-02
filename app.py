@@ -500,6 +500,86 @@ def delete_project(project_pk: int) -> None:
         conn.execute(sql("DELETE FROM projects WHERE id = ?"), (project_pk,))
 
 
+def find_existing_project_id(conn, payload: dict):
+    project_id = payload.get("project_id")
+    if project_id:
+        existing = conn.execute(sql("SELECT id FROM projects WHERE project_id = ?"), (project_id,)).fetchone()
+        if existing:
+            return existing["id"]
+
+    sn = str(payload.get("sn") or "").strip()
+    if sn:
+        existing = conn.execute(
+            sql("SELECT id FROM projects WHERE sn = ? ORDER BY id DESC LIMIT 1"),
+            (sn,),
+        ).fetchone()
+        if existing:
+            return existing["id"]
+
+    customer_name = str(payload.get("customer_name") or "").strip()
+    site_name = str(payload.get("site_name") or "").strip()
+    confirmation_date = iso_date(payload.get("confirmation_date"))
+    if customer_name and site_name:
+        existing = conn.execute(
+            sql(
+                """
+                SELECT id
+                FROM projects
+                WHERE LOWER(TRIM(customer_name)) = LOWER(TRIM(?))
+                  AND LOWER(TRIM(site_name)) = LOWER(TRIM(?))
+                  AND (? IS NULL OR confirmation_date = ?)
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ),
+            (customer_name, site_name, confirmation_date, confirmation_date),
+        ).fetchone()
+        if existing:
+            return existing["id"]
+    return None
+
+
+def cleanup_duplicate_import_rows(conn) -> int:
+    blank_rows = conn.execute(
+        sql(
+            """
+            DELETE FROM projects
+            WHERE LOWER(TRIM(customer_name)) = 'unnamed customer'
+              AND LOWER(TRIM(site_name)) = 'unnamed site'
+            RETURNING id
+            """
+        )
+    ).fetchall()
+    if USING_POSTGRES:
+        rows = conn.execute(
+            """
+            DELETE FROM projects p
+            USING projects keep
+            WHERE p.sn IS NOT NULL
+              AND TRIM(p.sn) <> ''
+              AND keep.sn = p.sn
+              AND keep.id > p.id
+            RETURNING p.id
+            """
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            DELETE FROM projects
+            WHERE sn IS NOT NULL
+              AND TRIM(sn) <> ''
+              AND id NOT IN (
+                SELECT MAX(id)
+                FROM projects
+                WHERE sn IS NOT NULL AND TRIM(sn) <> ''
+                GROUP BY sn
+              )
+            RETURNING id
+            """
+        ).fetchall()
+    return len(blank_rows) + len(rows)
+
+
 def summary() -> dict:
     projects = get_projects({})
     active = [p for p in projects if not p["archived"]]
@@ -687,26 +767,27 @@ def import_workbook(file_bytes: bytes) -> dict:
     imported = 0
     updated = 0
     errors = []
+    cleaned_duplicates = 0
     now = datetime.utcnow().isoformat(timespec="seconds")
     with connect() as conn:
+        cleaned_duplicates = cleanup_duplicate_import_rows(conn)
         for index, row in enumerate(rows[1:], start=2):
             payload = {}
             for header, value in zip(headers, row):
                 if header:
                     payload[header] = value
-            if not any(payload.values()):
+            has_business_name = any(str(payload.get(field) or "").strip() for field in ("customer_name", "site_name"))
+            has_project_id = bool(str(payload.get("project_id") or "").strip())
+            if not any(payload.values()) or not (has_project_id or has_business_name):
                 continue
             try:
-                project_id = payload.get("project_id")
-                existing = None
-                if project_id:
-                    existing = conn.execute(sql("SELECT id FROM projects WHERE project_id = ?"), (project_id,)).fetchone()
-                save_project_with_conn(conn, payload, existing["id"] if existing else None, now)
-                updated += 1 if existing else 0
-                imported += 0 if existing else 1
+                existing_id = find_existing_project_id(conn, payload)
+                save_project_with_conn(conn, payload, existing_id, now)
+                updated += 1 if existing_id else 0
+                imported += 0 if existing_id else 1
             except Exception as exc:  # pragma: no cover - user data path
                 errors.append(f"Row {index}: {exc}")
-    return {"imported": imported, "updated": updated, "errors": errors}
+    return {"imported": imported, "updated": updated, "cleaned_duplicates": cleaned_duplicates, "errors": errors}
 
 
 def json_response(handler: BaseHTTPRequestHandler, payload, status=HTTPStatus.OK) -> None:

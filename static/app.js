@@ -314,7 +314,8 @@ async function importExcel(file) {
     const bytes = await file.arrayBuffer();
     const result = await api('/api/import', { method: 'POST', body: bytes });
     const errorText = result.errors?.length ? `, ${result.errors.length} row errors` : '';
-    toast(`Imported ${result.imported}, updated ${result.updated}${errorText}`);
+    const cleanupText = result.cleaned_duplicates ? `, cleaned ${result.cleaned_duplicates} duplicates` : '';
+    toast(`Imported ${result.imported}, updated ${result.updated}${cleanupText}${errorText}`);
     if (result.errors?.length) {
       console.warn('Import row errors:', result.errors);
       alert(`Import completed with ${result.errors.length} row errors. The first issue was:\n\n${result.errors[0]}`);
