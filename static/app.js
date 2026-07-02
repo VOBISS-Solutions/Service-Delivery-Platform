@@ -15,7 +15,7 @@ const titles = {
 
 const fields = [
   'customer_name', 'site_name', 'sn', 'parent_project_id', 'location', 'region',
-  'capacity', 'bandwidth', 'service_type', 'cpe', 'confirmation_date', 'start_date',
+  'capacity', 'bandwidth', 'service_type', 'cpe', 'currency', 'confirmation_date', 'start_date',
   'target_completion_date', 'completion_date', 'status', 'mrc', 'nrc',
   'planned_adss_distance_m', 'planned_drop_distance_m', 'poles_9m', 'poles_11m',
   'labour', 'trench', 'archived', 'remarks',
@@ -113,6 +113,7 @@ function render() {
   renderBars('#serviceBars', state.summary.by_service_type || {});
   renderMaterials();
   renderDelayed();
+  renderRecent();
   renderProjects();
   renderReport();
 }
@@ -125,6 +126,7 @@ function renderMetrics() {
     ['Delayed', state.summary.delayed_projects],
     ['Avg Days', state.summary.average_completion_days],
     ['MRC', money(state.summary.mrc)],
+    ['Total Cost', money(state.summary.costs?.total_cost)],
   ];
   $('#metrics').innerHTML = metrics.map(([label, value]) => `
     <article class="metric"><span>${label}</span><strong>${value ?? 0}</strong></article>
@@ -149,12 +151,15 @@ function renderMaterials() {
     planned_drop_distance_m: 'Planned Drop (m)',
     poles_9m: '9m Poles',
     poles_11m: '11m Poles',
-    labour: 'Labour',
-    trench: 'Trench',
+    pole_cost: 'Pole Cost',
+    transportation_cost: 'Transportation',
+    labour_cost: 'Labour Cost',
+    total_cost: 'Total Cost',
   };
   const materials = state.summary.materials || {};
+  const costs = state.summary.costs || {};
   $('#materialGrid').innerHTML = Object.entries(labels).map(([key, label]) => `
-    <article class="material-item"><span>${label}</span><strong>${number(materials[key])}</strong></article>
+    <article class="material-item"><span>${label}</span><strong>${key.includes('cost') ? money(costs[key]) : number(materials[key])}</strong></article>
   `).join('');
 }
 
@@ -171,6 +176,20 @@ function renderDelayed() {
   `).join('') || '<tr><td colspan="5" class="muted">No delayed projects in the current filter.</td></tr>';
 }
 
+function renderRecent() {
+  const recent = state.summary.recent || { today: 0, week: 0, items: [] };
+  $('#recentCount').textContent = `${recent.today || 0} today, ${recent.week || 0} this week`;
+  $('#recentRows').innerHTML = (recent.items || []).map((p) => `
+    <tr>
+      <td><strong>${escapeHtml(p.project_id)}</strong></td>
+      <td>${escapeHtml(p.customer_name)}</td>
+      <td>${escapeHtml(p.site_name)}</td>
+      <td><span class="status-pill">${escapeHtml(p.status)}</span></td>
+      <td>${escapeHtml((p.created_at || '').slice(0, 10))}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" class="muted">No projects added this week.</td></tr>';
+}
+
 function renderProjects() {
   $('#projectRows').innerHTML = state.projects.map((p) => `
     <tr>
@@ -181,10 +200,17 @@ function renderProjects() {
       <td><span class="status-pill">${escapeHtml(p.status)}</span>${p.is_delayed ? '<span class="delay-pill">Delayed</span>' : ''}</td>
       <td>${escapeHtml(p.target_completion_date || '')}</td>
       <td>${p.aging_days ?? ''}<div class="muted">${escapeHtml(p.aging_bucket)}</div></td>
-      <td><strong>${money(p.mrc)}</strong><div class="muted">NRC ${money(p.nrc)}</div></td>
+      <td>${escapeHtml(p.currency || 'GHS')}</td>
+      <td><strong>${money(p.mrc)}</strong></td>
+      <td><strong>${money(p.nrc)}</strong></td>
+      <td>${number(p.poles_9m)}</td>
+      <td>${number(p.poles_11m)}</td>
+      <td>${number(p.planned_adss_distance_m)}</td>
+      <td>${number(p.planned_drop_distance_m)}</td>
+      <td><strong>${money(p.total_cost)}</strong><div class="muted">Labour ${money(p.labour_cost)}</div></td>
       <td><button data-edit="${p.id}">Edit</button></td>
     </tr>
-  `).join('') || '<tr><td colspan="9" class="muted">No projects match the current filters.</td></tr>';
+  `).join('') || '<tr><td colspan="16" class="muted">No projects match the current filters.</td></tr>';
   $$('[data-edit]').forEach((btn) => btn.addEventListener('click', () => openProject(Number(btn.dataset.edit))));
 }
 
@@ -214,6 +240,7 @@ function switchView(view) {
 function openProject(id = null) {
   const form = $('#projectForm');
   form.reset();
+  form.elements.currency.value = 'GHS';
   $('#projectDbId').value = '';
   $('#deleteProject').style.visibility = id ? 'visible' : 'hidden';
   $('#dialogTitle').textContent = id ? 'Edit Project' : 'New Project';

@@ -67,10 +67,15 @@ PROJECT_FIELDS = [
     "completion_date",
     "status",
     "remarks",
+    "currency",
     "mrc",
     "nrc",
     "poles_9m",
     "poles_11m",
+    "pole_cost",
+    "transportation_cost",
+    "labour_cost",
+    "total_cost",
     "labour",
     "trench",
     "parent_project_id",
@@ -84,6 +89,10 @@ NUMERIC_FIELDS = {
     "nrc",
     "poles_9m",
     "poles_11m",
+    "pole_cost",
+    "transportation_cost",
+    "labour_cost",
+    "total_cost",
     "labour",
     "trench",
 }
@@ -97,6 +106,7 @@ DATE_FIELDS = {
 
 HEADER_ALIASES = {
     "project id": "project_id",
+    "column1": "sn",
     "sn": "sn",
     "customer name": "customer_name",
     "customer": "customer_name",
@@ -108,22 +118,41 @@ HEADER_ALIASES = {
     "bandwidth": "bandwidth",
     "planned adss distance (m)": "planned_adss_distance_m",
     "planned adss distance": "planned_adss_distance_m",
+    "adss": "planned_adss_distance_m",
     "planned drop distance (m)": "planned_drop_distance_m",
     "planned drop distance": "planned_drop_distance_m",
+    "drop": "planned_drop_distance_m",
     "service type": "service_type",
+    "product": "service_type",
     "cpe": "cpe",
     "confirmation date": "confirmation_date",
     "order received date": "confirmation_date",
+    "date submitted": "confirmation_date",
     "start date": "start_date",
+    "billing start date": "start_date",
     "target completion date": "target_completion_date",
+    "estimated completion": "target_completion_date",
     "completion date": "completion_date",
     "delivery date": "completion_date",
+    "date completed": "completion_date",
     "status": "status",
     "remarks": "remarks",
+    "comments": "remarks",
+    "currency": "currency",
     "mrc": "mrc",
     "nrc": "nrc",
+    "9m": "poles_9m",
     "9m poles": "poles_9m",
+    "11m": "poles_11m",
     "11m poles": "poles_11m",
+    "pole cost": "pole_cost",
+    "transportation": "transportation_cost",
+    "transportation cost": "transportation_cost",
+    "labour (chs)": "labour_cost",
+    "labor (chs)": "labour_cost",
+    "labour cost": "labour_cost",
+    "labor cost": "labour_cost",
+    "total cost": "total_cost",
     "labour": "labour",
     "labor": "labour",
     "trench": "trench",
@@ -179,10 +208,15 @@ def init_db() -> None:
                     completion_date TEXT,
                     status TEXT NOT NULL DEFAULT 'Planned',
                     remarks TEXT,
+                    currency TEXT DEFAULT 'GHS',
                     mrc DOUBLE PRECISION DEFAULT 0,
                     nrc DOUBLE PRECISION DEFAULT 0,
                     poles_9m DOUBLE PRECISION DEFAULT 0,
                     poles_11m DOUBLE PRECISION DEFAULT 0,
+                    pole_cost DOUBLE PRECISION DEFAULT 0,
+                    transportation_cost DOUBLE PRECISION DEFAULT 0,
+                    labour_cost DOUBLE PRECISION DEFAULT 0,
+                    total_cost DOUBLE PRECISION DEFAULT 0,
                     labour DOUBLE PRECISION DEFAULT 0,
                     trench DOUBLE PRECISION DEFAULT 0,
                     parent_project_id TEXT,
@@ -215,10 +249,15 @@ def init_db() -> None:
                     completion_date TEXT,
                     status TEXT NOT NULL DEFAULT 'Planned',
                     remarks TEXT,
+                    currency TEXT DEFAULT 'GHS',
                     mrc REAL DEFAULT 0,
                     nrc REAL DEFAULT 0,
                     poles_9m REAL DEFAULT 0,
                     poles_11m REAL DEFAULT 0,
+                    pole_cost REAL DEFAULT 0,
+                    transportation_cost REAL DEFAULT 0,
+                    labour_cost REAL DEFAULT 0,
+                    total_cost REAL DEFAULT 0,
                     labour REAL DEFAULT 0,
                     trench REAL DEFAULT 0,
                     parent_project_id TEXT,
@@ -237,6 +276,33 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_projects_customer ON projects(customer_name)"
         )
+        ensure_project_columns(conn)
+
+
+def ensure_project_columns(conn) -> None:
+    columns = {
+        "currency": "TEXT DEFAULT 'GHS'",
+        "pole_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
+        "transportation_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
+        "labour_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
+        "total_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
+    }
+    if USING_POSTGRES:
+        existing = {
+            row["column_name"]
+            for row in conn.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'projects'
+                """
+            ).fetchall()
+        }
+    else:
+        existing = {row["name"] for row in conn.execute("PRAGMA table_info(projects)").fetchall()}
+    for name, definition in columns.items():
+        if name not in existing:
+            conn.execute(f"ALTER TABLE projects ADD COLUMN {name} {definition}")
 
 
 def today() -> date:
@@ -306,13 +372,27 @@ def normalize_project(payload: dict, existing_project_id: str | None = None) -> 
 
     data["customer_name"] = data["customer_name"] or "Unnamed Customer"
     data["site_name"] = data["site_name"] or "Unnamed Site"
+    data["currency"] = data["currency"] or "GHS"
     data["status"] = data["status"] if data["status"] in STATUSES else "Planned"
     data["project_id"] = payload.get("project_id") or existing_project_id or make_project_id()
+    apply_cost_calculations(data)
     return data
+
+
+def apply_cost_calculations(data: dict) -> None:
+    poles_9m = normalize_number(data.get("poles_9m"))
+    poles_11m = normalize_number(data.get("poles_11m"))
+    adss = normalize_number(data.get("planned_adss_distance_m"))
+    drop = normalize_number(data.get("planned_drop_distance_m"))
+    data["pole_cost"] = (2000 * poles_9m) + (3000 * poles_11m)
+    data["transportation_cost"] = 500 * poles_9m + 500 * poles_11m
+    data["labour_cost"] = (2 * adss) + (2 * drop)
+    data["total_cost"] = data["pole_cost"] + data["transportation_cost"] + data["labour_cost"]
 
 
 def row_to_project(row: sqlite3.Row) -> dict:
     project = dict(row)
+    apply_cost_calculations(project)
     target = parse_date(project.get("target_completion_date"))
     confirmation = parse_date(project.get("confirmation_date"))
     completion = parse_date(project.get("completion_date"))
@@ -356,7 +436,7 @@ def get_projects(query: dict) -> list[dict]:
         params.append(query["customer"])
     if query.get("archived") in {"0", "1"}:
         clauses.append("archived = ?")
-        params.append(int(query["archived"]))
+        params.append(bool(int(query["archived"])) if USING_POSTGRES else int(query["archived"]))
     if query.get("q"):
         clauses.append("(site_name LIKE ? OR customer_name LIKE ? OR remarks LIKE ?)")
         search = f"%{query['q']}%"
@@ -439,6 +519,17 @@ def summary() -> dict:
         bucket = p["aging_bucket"]
         aging[bucket] = aging.get(bucket, 0) + 1
 
+    today_date = today()
+    week_start = today_date.fromordinal(today_date.toordinal() - today_date.weekday())
+    recent_today = []
+    recent_week = []
+    for p in projects:
+        created = parse_date((p.get("created_at") or "").split("T")[0])
+        if created == today_date:
+            recent_today.append(p)
+        if created and created >= week_start:
+            recent_week.append(p)
+
     return {
         "total_projects": len(projects),
         "active_projects": len(active),
@@ -455,6 +546,17 @@ def summary() -> dict:
             "poles_11m": sum(float(p.get("poles_11m") or 0) for p in projects),
             "labour": sum(float(p.get("labour") or 0) for p in projects),
             "trench": sum(float(p.get("trench") or 0) for p in projects),
+        },
+        "costs": {
+            "pole_cost": sum(float(p.get("pole_cost") or 0) for p in projects),
+            "transportation_cost": sum(float(p.get("transportation_cost") or 0) for p in projects),
+            "labour_cost": sum(float(p.get("labour_cost") or 0) for p in projects),
+            "total_cost": sum(float(p.get("total_cost") or 0) for p in projects),
+        },
+        "recent": {
+            "today": len(recent_today),
+            "week": len(recent_week),
+            "items": recent_week[:10],
         },
         "aging": aging,
         "by_status": by_field("status"),
@@ -489,6 +591,9 @@ def export_workbook(projects: list[dict]) -> bytes:
         "Site Name",
         "Location",
         "Region",
+        "Currency",
+        "MRC",
+        "NRC",
         "Capacity",
         "Bandwidth",
         "Planned ADSS Distance (m)",
@@ -504,10 +609,12 @@ def export_workbook(projects: list[dict]) -> bytes:
         "Delayed",
         "Status",
         "Remarks",
-        "MRC",
-        "NRC",
         "9m Poles",
         "11m Poles",
+        "Pole Cost",
+        "Transportation",
+        "Labour Cost",
+        "Total Cost",
         "Labour",
         "Trench",
         "Parent Project ID",
@@ -522,6 +629,9 @@ def export_workbook(projects: list[dict]) -> bytes:
             p.get("site_name"),
             p.get("location"),
             p.get("region"),
+            p.get("currency"),
+            p.get("mrc"),
+            p.get("nrc"),
             p.get("capacity"),
             p.get("bandwidth"),
             p.get("planned_adss_distance_m"),
@@ -537,10 +647,12 @@ def export_workbook(projects: list[dict]) -> bytes:
             "Yes" if p.get("is_delayed") else "No",
             p.get("status"),
             p.get("remarks"),
-            p.get("mrc"),
-            p.get("nrc"),
             p.get("poles_9m"),
             p.get("poles_11m"),
+            p.get("pole_cost"),
+            p.get("transportation_cost"),
+            p.get("labour_cost"),
+            p.get("total_cost"),
             p.get("labour"),
             p.get("trench"),
             p.get("parent_project_id"),
@@ -558,11 +670,17 @@ def import_workbook(file_bytes: bytes) -> dict:
     if load_workbook is None:
         raise RuntimeError("openpyxl is required for Excel import")
     wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
-    ws = wb.active
+    ws = wb["2026 WIP Tracker"] if "2026 WIP Tracker" in wb.sheetnames else max(wb.worksheets, key=lambda sheet: sheet.max_row * sheet.max_column)
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         return {"imported": 0, "updated": 0, "errors": []}
-    headers = [HEADER_ALIASES.get(str(h or "").strip().lower()) for h in rows[0]]
+    headers = []
+    for index, header in enumerate(rows[0], start=1):
+        key = str(header or "").strip().lower()
+        mapped = HEADER_ALIASES.get(key)
+        if not mapped and index == 2:
+            mapped = "customer_name"
+        headers.append(mapped)
     imported = 0
     updated = 0
     errors = []

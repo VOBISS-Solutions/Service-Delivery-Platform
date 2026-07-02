@@ -247,7 +247,7 @@ textarea { resize: vertical; }
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 860px;
+  min-width: 1320px;
 }
 
 th, td {
@@ -295,7 +295,7 @@ tr:last-child td { border-bottom: 0; }
 
 .material-grid, .report-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
   gap: 10px;
 }
 
