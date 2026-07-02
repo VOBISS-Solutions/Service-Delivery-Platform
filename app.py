@@ -915,11 +915,24 @@ def seed_if_empty() -> None:
         save_project(sample)
 
 
+def remove_demo_seed_data() -> None:
+    demo_pairs = [
+        ("Acme Fibre", "Airport Branch"),
+        ("Northstar Bank", "Kumasi DR Site"),
+    ]
+    with connect() as conn:
+        for customer_name, site_name in demo_pairs:
+            conn.execute(
+                sql("DELETE FROM projects WHERE customer_name = ? AND site_name = ?"),
+                (customer_name, site_name),
+            )
+
+
 def main() -> None:
     if REQUIRE_DATABASE_URL and not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is required for this deployment")
     init_db()
-    seed_if_empty()
+    remove_demo_seed_data()
     port = int(os.environ.get("PORT", "8765"))
     host = os.environ.get("HOST", "127.0.0.1")
     server = ThreadingHTTPServer((host, port), TrackerHandler)
