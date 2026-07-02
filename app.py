@@ -10,7 +10,7 @@ from http.cookies import SimpleCookie
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qsl, parse_qs, urlencode, urlparse, urlunparse
 
 try:
     from openpyxl import Workbook, load_workbook
@@ -136,11 +136,18 @@ def sql(statement: str) -> str:
     return statement.replace("?", "%s") if USING_POSTGRES else statement
 
 
+def postgres_url() -> str:
+    parsed = urlparse(DATABASE_URL)
+    ignored_params = {"pgbouncer", "connection_limit"}
+    query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True) if key not in ignored_params]
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
 def connect():
     if USING_POSTGRES:
         if psycopg is None:
             raise RuntimeError("psycopg is required when DATABASE_URL is set")
-        return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        return psycopg.connect(postgres_url(), row_factory=dict_row)
     DB_PATH.parent.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
