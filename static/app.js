@@ -45,6 +45,20 @@ function toast(message) {
   setTimeout(() => el.classList.remove('show'), 2600);
 }
 
+function setBusy(isBusy, title = 'Working', message = 'Please wait.') {
+  const overlay = $('#loadingOverlay');
+  $('#loadingTitle').textContent = title;
+  $('#loadingMessage').textContent = message;
+  overlay.classList.toggle('show', isBusy);
+  overlay.setAttribute('aria-hidden', String(!isBusy));
+  ['#exportBtn', '#newProjectBtn', '#logoutBtn'].forEach((selector) => {
+    const el = $(selector);
+    if (el) el.disabled = isBusy;
+  });
+  const importFile = $('#importFile');
+  if (importFile) importFile.disabled = isBusy;
+}
+
 function filterParams() {
   const params = new URLSearchParams();
   const mapping = {
@@ -286,11 +300,24 @@ async function deleteCurrentProject() {
 }
 
 async function importExcel(file) {
-  const bytes = await file.arrayBuffer();
-  const result = await api('/api/import', { method: 'POST', body: bytes });
-  toast(`Imported ${result.imported}, updated ${result.updated}`);
-  if (result.errors?.length) console.warn(result.errors);
-  await load();
+  setBusy(true, 'Importing workbook', `Uploading ${file.name} and saving tracker rows.`);
+  try {
+    const bytes = await file.arrayBuffer();
+    const result = await api('/api/import', { method: 'POST', body: bytes });
+    const errorText = result.errors?.length ? `, ${result.errors.length} row errors` : '';
+    toast(`Imported ${result.imported}, updated ${result.updated}${errorText}`);
+    if (result.errors?.length) {
+      console.warn('Import row errors:', result.errors);
+      alert(`Import completed with ${result.errors.length} row errors. The first issue was:\n\n${result.errors[0]}`);
+    }
+    setBusy(true, 'Refreshing dashboard', 'Loading the latest imported data.');
+    await load();
+  } catch (error) {
+    toast(error.message);
+    alert(`Import failed:\n\n${error.message}`);
+  } finally {
+    setBusy(false);
+  }
 }
 
 function exportExcel() {

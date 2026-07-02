@@ -208,6 +208,15 @@
     </form>
   </dialog>
 
+  <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-hidden="true">
+    <section class="loading-panel">
+      <div class="spinner"></div>
+      <h2 id="loadingTitle">Importing workbook</h2>
+      <p id="loadingMessage">Reading rows, calculating costs, and saving projects.</p>
+      <div class="progress-track"><div class="progress-fill"></div></div>
+    </section>
+  </div>
+
   <div id="toast"></div>
   <script src="/app.js"></script>
 </body>
