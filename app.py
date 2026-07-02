@@ -463,33 +463,36 @@ def get_projects(query: dict) -> list[dict]:
     return [row_to_project(row) for row in rows]
 
 
-def save_project(payload: dict, project_pk: int | None = None) -> dict:
-    now = datetime.utcnow().isoformat(timespec="seconds")
+def save_project_with_conn(conn, payload: dict, project_pk: int | None = None, now: str | None = None) -> dict:
+    now = now or datetime.utcnow().isoformat(timespec="seconds")
     existing = None
     if project_pk:
-        with connect() as conn:
-            existing = conn.execute(sql("SELECT * FROM projects WHERE id = ?"), (project_pk,)).fetchone()
+        existing = conn.execute(sql("SELECT * FROM projects WHERE id = ?"), (project_pk,)).fetchone()
         if not existing:
             raise KeyError("Project not found")
 
     data = normalize_project(payload, existing["project_id"] if existing else None)
     data["updated_at"] = now
 
-    with connect() as conn:
-        if project_pk:
-            assignments = ", ".join([f"{field} = ?" for field in ["project_id"] + PROJECT_FIELDS] + ["updated_at = ?"])
-            values = [data["project_id"]] + [data[field] for field in PROJECT_FIELDS] + [data["updated_at"], project_pk]
-            conn.execute(sql(f"UPDATE projects SET {assignments} WHERE id = ?"), values)
-        else:
-            data["created_at"] = now
-            fields = ["project_id"] + PROJECT_FIELDS + ["created_at", "updated_at"]
-            placeholders = ", ".join(["?"] * len(fields))
-            conn.execute(
-                sql(f"INSERT INTO projects ({', '.join(fields)}) VALUES ({placeholders})"),
-                [data[field] for field in fields],
-            )
-        row = conn.execute(sql("SELECT * FROM projects WHERE project_id = ?"), (data["project_id"],)).fetchone()
+    if project_pk:
+        assignments = ", ".join([f"{field} = ?" for field in ["project_id"] + PROJECT_FIELDS] + ["updated_at = ?"])
+        values = [data["project_id"]] + [data[field] for field in PROJECT_FIELDS] + [data["updated_at"], project_pk]
+        conn.execute(sql(f"UPDATE projects SET {assignments} WHERE id = ?"), values)
+    else:
+        data["created_at"] = now
+        fields = ["project_id"] + PROJECT_FIELDS + ["created_at", "updated_at"]
+        placeholders = ", ".join(["?"] * len(fields))
+        conn.execute(
+            sql(f"INSERT INTO projects ({', '.join(fields)}) VALUES ({placeholders})"),
+            [data[field] for field in fields],
+        )
+    row = conn.execute(sql("SELECT * FROM projects WHERE project_id = ?"), (data["project_id"],)).fetchone()
     return row_to_project(row)
+
+
+def save_project(payload: dict, project_pk: int | None = None) -> dict:
+    with connect() as conn:
+        return save_project_with_conn(conn, payload, project_pk)
 
 
 def delete_project(project_pk: int) -> None:
@@ -684,6 +687,7 @@ def import_workbook(file_bytes: bytes) -> dict:
     imported = 0
     updated = 0
     errors = []
+    now = datetime.utcnow().isoformat(timespec="seconds")
     with connect() as conn:
         for index, row in enumerate(rows[1:], start=2):
             payload = {}
@@ -697,7 +701,7 @@ def import_workbook(file_bytes: bytes) -> dict:
                 existing = None
                 if project_id:
                     existing = conn.execute(sql("SELECT id FROM projects WHERE project_id = ?"), (project_id,)).fetchone()
-                saved = save_project(payload, existing["id"] if existing else None)
+                save_project_with_conn(conn, payload, existing["id"] if existing else None, now)
                 updated += 1 if existing else 0
                 imported += 0 if existing else 1
             except Exception as exc:  # pragma: no cover - user data path

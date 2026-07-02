@@ -128,8 +128,8 @@ function render() {
   renderMaterials();
   renderDelayed();
   renderRecent();
-  renderProjects();
-  renderReport();
+  if (state.activeView === 'projects') renderProjects();
+  if (state.activeView === 'reports') renderReport();
 }
 
 function renderMetrics() {
@@ -205,7 +205,8 @@ function renderRecent() {
 }
 
 function renderProjects() {
-  $('#projectRows').innerHTML = state.projects.map((p) => `
+  const visibleProjects = state.projects.slice(0, 300);
+  $('#projectRows').innerHTML = visibleProjects.map((p) => `
     <tr>
       <td><strong>${escapeHtml(p.project_id)}</strong>${p.archived ? '<span class="archive-pill">Archived</span>' : ''}<div class="muted">${escapeHtml(p.sn || '')}</div></td>
       <td><strong>${escapeHtml(p.customer_name)}</strong><div class="muted">${escapeHtml(p.site_name)}</div></td>
@@ -225,6 +226,12 @@ function renderProjects() {
       <td><button data-edit="${p.id}">Edit</button></td>
     </tr>
   `).join('') || '<tr><td colspan="16" class="muted">No projects match the current filters.</td></tr>';
+  if (state.projects.length > visibleProjects.length) {
+    $('#projectRows').insertAdjacentHTML(
+      'beforeend',
+      `<tr><td colspan="16" class="muted">Showing first ${visibleProjects.length} of ${state.projects.length} projects. Use search or filters to narrow the list.</td></tr>`
+    );
+  }
   $$('[data-edit]').forEach((btn) => btn.addEventListener('click', () => openProject(Number(btn.dataset.edit))));
 }
 
@@ -249,6 +256,8 @@ function switchView(view) {
   $$('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
   $('#viewTitle').textContent = titles[view][0];
   $('#viewSubtitle').textContent = titles[view][1];
+  if (view === 'projects') renderProjects();
+  if (view === 'reports') renderReport();
 }
 
 function openProject(id = null) {
