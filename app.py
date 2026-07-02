@@ -32,6 +32,7 @@ ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("DATABASE_PATH", ROOT / "data" / "project_tracker.db"))
 DATABASE_URL = os.environ.get("DATABASE_URL")
 USING_POSTGRES = bool(DATABASE_URL)
+REQUIRE_DATABASE_URL = os.environ.get("REQUIRE_DATABASE_URL", "").lower() in {"1", "true", "yes"}
 STATIC_DIR = ROOT / "static"
 APP_PASSWORD = os.environ.get("TRACKER_PASSWORD", "change-me")
 SESSIONS: set[str] = set()
@@ -785,6 +786,8 @@ def seed_if_empty() -> None:
 
 
 def main() -> None:
+    if REQUIRE_DATABASE_URL and not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is required for this deployment")
     init_db()
     seed_if_empty()
     port = int(os.environ.get("PORT", "8765"))

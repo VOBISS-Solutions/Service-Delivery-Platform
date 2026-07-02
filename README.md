@@ -45,7 +45,7 @@ Render settings:
 
 ```text
 Build command: pip install -r requirements.txt
-Start command: HOST=0.0.0.0 python app.py
+Start command: HOST=0.0.0.0 REQUIRE_DATABASE_URL=true python app.py
 Health check path: /api/health
 ```
 

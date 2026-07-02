@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: HOST=0.0.0.0 python app.py
+    startCommand: HOST=0.0.0.0 REQUIRE_DATABASE_URL=true python app.py
     healthCheckPath: /api/health
     envVars:
       - key: TRACKER_PASSWORD
