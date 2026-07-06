@@ -207,12 +207,17 @@ function renderRecent() {
 function renderProjects() {
   const visibleProjects = state.projects.slice(0, 300);
   $('#projectRows').innerHTML = visibleProjects.map((p) => `
-    <tr>
+    <tr data-project-id="${p.id}">
       <td><strong>${escapeHtml(p.project_id)}</strong>${p.archived ? '<span class="archive-pill">Archived</span>' : ''}<div class="muted">${escapeHtml(p.sn || '')}</div></td>
       <td><strong>${escapeHtml(p.customer_name)}</strong><div class="muted">${escapeHtml(p.site_name)}</div></td>
       <td>${escapeHtml(p.region || '')}</td>
       <td>${escapeHtml(p.service_type || '')}</td>
-      <td><span class="status-pill">${escapeHtml(p.status)}</span>${p.is_delayed ? '<span class="delay-pill">Delayed</span>' : ''}</td>
+      <td>
+        <select class="status-select" data-status-id="${p.id}">
+          ${(state.options.statuses || []).map((status) => `<option value="${escapeHtml(status)}" ${status === p.status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}
+        </select>
+        ${p.is_delayed ? '<span class="delay-pill">Delayed</span>' : ''}
+      </td>
       <td>${escapeHtml(p.target_completion_date || '')}</td>
       <td>${p.aging_days ?? ''}<div class="muted">${escapeHtml(p.aging_bucket)}</div></td>
       <td>${escapeHtml(p.currency || 'GHS')}</td>
@@ -232,7 +237,15 @@ function renderProjects() {
       `<tr><td colspan="16" class="muted">Showing first ${visibleProjects.length} of ${state.projects.length} projects. Use search or filters to narrow the list.</td></tr>`
     );
   }
+  $$('#projectRows tr[data-project-id]').forEach((row) => row.addEventListener('dblclick', (event) => {
+    if (event.target.closest('select, button, input, textarea')) return;
+    openProject(Number(row.dataset.projectId));
+  }));
   $$('[data-edit]').forEach((btn) => btn.addEventListener('click', () => openProject(Number(btn.dataset.edit))));
+  $$('[data-status-id]').forEach((select) => {
+    select.addEventListener('dblclick', (event) => event.stopPropagation());
+    select.addEventListener('change', () => updateProjectStatus(Number(select.dataset.statusId), select.value));
+  });
 }
 
 function renderReport() {
@@ -306,6 +319,27 @@ async function deleteCurrentProject() {
   $('#projectDialog').close();
   toast('Project deleted');
   await load();
+}
+
+async function updateProjectStatus(id, status) {
+  const project = state.projects.find((item) => item.id === id);
+  if (!project || project.status === status) return;
+  const payload = {};
+  fields.forEach((field) => {
+    payload[field] = project[field] ?? '';
+  });
+  payload.status = status;
+  try {
+    await api(`/api/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    toast('Status updated');
+    await load();
+  } catch (error) {
+    toast(error.message);
+    await load();
+  }
 }
 
 async function importExcel(file) {

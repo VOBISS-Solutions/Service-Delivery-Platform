@@ -266,6 +266,8 @@ th {
 }
 
 tr:last-child td { border-bottom: 0; }
+tbody tr[data-project-id] { cursor: pointer; }
+tbody tr[data-project-id]:hover { background: #fbfcfb; }
 
 .compact table { min-width: 640px; }
 .muted { color: var(--muted); }
@@ -291,6 +293,19 @@ tr:last-child td { border-bottom: 0; }
   background: #f1f5f9;
   color: #475569;
   margin-left: 6px;
+}
+
+.status-select {
+  width: auto;
+  min-width: 132px;
+  min-height: 30px;
+  border-color: #dfe7ff;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 28px 3px 10px;
 }
 
 .material-grid, .report-grid {
