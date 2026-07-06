@@ -38,16 +38,30 @@ APP_PASSWORD = os.environ.get("TRACKER_PASSWORD", "change-me")
 SESSIONS: set[str] = set()
 
 STATUSES = [
-    "Planned",
-    "Survey",
-    "Procurement",
-    "Implementation",
-    "Testing",
-    "Delivered",
-    "Confirmed",
-    "On Hold",
+    "Completed",
+    "On-Hold",
+    "In-Progress",
     "Cancelled",
+    "Survey",
 ]
+
+STATUS_ALIASES = {
+    "completed": "Completed",
+    "delivered": "Completed",
+    "confirmed": "Completed",
+    "on hold": "On-Hold",
+    "on-hold": "On-Hold",
+    "in progress": "In-Progress",
+    "in-progress": "In-Progress",
+    "in-peogress": "In-Progress",
+    "planned": "In-Progress",
+    "procurement": "In-Progress",
+    "implementation": "In-Progress",
+    "testing": "In-Progress",
+    "survey": "Survey",
+    "cancelled": "Cancelled",
+    "canceled": "Cancelled",
+}
 
 PROJECT_FIELDS = [
     "sn",
@@ -206,7 +220,7 @@ def init_db() -> None:
                     start_date TEXT,
                     target_completion_date TEXT,
                     completion_date TEXT,
-                    status TEXT NOT NULL DEFAULT 'Planned',
+                    status TEXT NOT NULL DEFAULT 'In-Progress',
                     remarks TEXT,
                     currency TEXT DEFAULT 'GHS',
                     mrc DOUBLE PRECISION DEFAULT 0,
@@ -247,7 +261,7 @@ def init_db() -> None:
                     start_date TEXT,
                     target_completion_date TEXT,
                     completion_date TEXT,
-                    status TEXT NOT NULL DEFAULT 'Planned',
+                    status TEXT NOT NULL DEFAULT 'In-Progress',
                     remarks TEXT,
                     currency TEXT DEFAULT 'GHS',
                     mrc REAL DEFAULT 0,
@@ -348,6 +362,11 @@ def normalize_bool(value) -> int:
     return 1 if str(value).strip().lower() in {"1", "yes", "true", "archived"} else 0
 
 
+def normalize_status(value) -> str:
+    text = str(value or "").strip()
+    return STATUS_ALIASES.get(text.lower(), text if text in STATUSES else "In-Progress")
+
+
 def normalize_archived(value):
     archived = bool(normalize_bool(value))
     return archived if USING_POSTGRES else int(archived)
@@ -373,7 +392,7 @@ def normalize_project(payload: dict, existing_project_id: str | None = None) -> 
     data["customer_name"] = data["customer_name"] or "Unnamed Customer"
     data["site_name"] = data["site_name"] or "Unnamed Site"
     data["currency"] = data["currency"] or "GHS"
-    data["status"] = data["status"] if data["status"] in STATUSES else "Planned"
+    data["status"] = normalize_status(data["status"])
     data["project_id"] = payload.get("project_id") or existing_project_id or make_project_id()
     apply_cost_calculations(data)
     return data
@@ -393,11 +412,12 @@ def apply_cost_calculations(data: dict) -> None:
 def row_to_project(row: sqlite3.Row) -> dict:
     project = dict(row)
     apply_cost_calculations(project)
+    project["status"] = normalize_status(project.get("status"))
     target = parse_date(project.get("target_completion_date"))
     confirmation = parse_date(project.get("confirmation_date"))
     completion = parse_date(project.get("completion_date"))
     end = completion or today()
-    project["is_delayed"] = bool(target and target < today() and project["status"] not in {"Delivered", "Confirmed", "Cancelled"})
+    project["is_delayed"] = bool(target and target < today() and project["status"] not in {"Completed", "Cancelled"})
     project["aging_days"] = max((end - confirmation).days, 0) if confirmation else None
     project["aging_bucket"] = aging_bucket(project["aging_days"])
     project["archived"] = bool(project["archived"])
@@ -584,7 +604,7 @@ def cleanup_duplicate_import_rows(conn) -> int:
 def summary() -> dict:
     projects = get_projects({})
     active = [p for p in projects if not p["archived"]]
-    completed = [p for p in projects if p["status"] in {"Delivered", "Confirmed"}]
+    completed = [p for p in projects if p["status"] == "Completed"]
     delayed = [p for p in active if p["is_delayed"]]
     completed_with_age = [p["aging_days"] for p in completed if p["aging_days"] is not None]
 
@@ -618,7 +638,7 @@ def summary() -> dict:
         "total_projects": len(projects),
         "active_projects": len(active),
         "completed_projects": len(completed),
-        "in_progress_projects": len([p for p in active if p["status"] not in {"Delivered", "Confirmed", "Cancelled"}]),
+        "in_progress_projects": len([p for p in active if p["status"] not in {"Completed", "Cancelled"}]),
         "delayed_projects": len(delayed),
         "average_completion_days": round(sum(completed_with_age) / len(completed_with_age), 1) if completed_with_age else 0,
         "mrc": sum(float(p.get("mrc") or 0) for p in projects),
@@ -1017,11 +1037,30 @@ def remove_demo_seed_data() -> None:
         )
 
 
+def migrate_project_statuses() -> None:
+    with connect() as conn:
+        for old_status, new_status in {
+            "Delivered": "Completed",
+            "Confirmed": "Completed",
+            "On Hold": "On-Hold",
+            "Planned": "In-Progress",
+            "Procurement": "In-Progress",
+            "Implementation": "In-Progress",
+            "Testing": "In-Progress",
+            "In-Peogress": "In-Progress",
+        }.items():
+            conn.execute(
+                sql("UPDATE projects SET status = ? WHERE status = ?"),
+                (new_status, old_status),
+            )
+
+
 def main() -> None:
     if REQUIRE_DATABASE_URL and not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is required for this deployment")
     init_db()
     remove_demo_seed_data()
+    migrate_project_statuses()
     port = int(os.environ.get("PORT", "8765"))
     host = os.environ.get("HOST", "127.0.0.1")
     server = ThreadingHTTPServer((host, port), TrackerHandler)
