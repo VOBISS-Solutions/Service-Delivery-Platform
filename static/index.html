@@ -42,14 +42,10 @@
 
     <section class="filters">
       <input id="searchInput" placeholder="Search customer, site, remarks">
-      <select id="statusFilter"><option value="">All statuses</option></select>
-      <select id="regionFilter"><option value="">All regions</option></select>
-      <select id="serviceFilter"><option value="">All services</option></select>
-      <select id="archiveFilter">
-        <option value="">Active & archived</option>
-        <option value="0">Active only</option>
-        <option value="1">Archived only</option>
-      </select>
+      <div id="statusFilter" class="multi-filter" data-placeholder="All statuses"></div>
+      <div id="regionFilter" class="multi-filter" data-placeholder="All regions"></div>
+      <div id="serviceFilter" class="multi-filter" data-placeholder="All services"></div>
+      <div id="archiveFilter" class="multi-filter" data-placeholder="Active & archived"></div>
       <input id="fromFilter" type="date" title="Confirmation date from">
       <input id="toFilter" type="date" title="Confirmation date to">
       <button id="clearFilters">Clear</button>

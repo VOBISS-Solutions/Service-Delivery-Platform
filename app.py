@@ -442,21 +442,28 @@ def get_projects(query: dict) -> list[dict]:
     clauses = []
     params = []
 
-    if query.get("status"):
-        clauses.append("status = ?")
-        params.append(query["status"])
-    if query.get("region"):
-        clauses.append("region = ?")
-        params.append(query["region"])
-    if query.get("service_type"):
-        clauses.append("service_type = ?")
-        params.append(query["service_type"])
-    if query.get("customer"):
-        clauses.append("customer_name = ?")
-        params.append(query["customer"])
-    if query.get("archived") in {"0", "1"}:
+    def values_for(key: str) -> list[str]:
+        value = query.get(key)
+        if not value:
+            return []
+        return [item for item in str(value).split("|") if item != ""]
+
+    def add_in_clause(field: str, values: list[str]) -> None:
+        if not values:
+            return
+        placeholders = ", ".join(["?"] * len(values))
+        clauses.append(f"{field} IN ({placeholders})")
+        params.extend(values)
+
+    add_in_clause("status", values_for("status"))
+    add_in_clause("region", values_for("region"))
+    add_in_clause("service_type", values_for("service_type"))
+    add_in_clause("customer_name", values_for("customer"))
+
+    archived_values = values_for("archived")
+    if len(archived_values) == 1 and archived_values[0] in {"0", "1"}:
         clauses.append("archived = ?")
-        params.append(bool(int(query["archived"])) if USING_POSTGRES else int(query["archived"]))
+        params.append(bool(int(archived_values[0])) if USING_POSTGRES else int(archived_values[0]))
     if query.get("q"):
         clauses.append("(site_name LIKE ? OR customer_name LIKE ? OR remarks LIKE ?)")
         search = f"%{query['q']}%"

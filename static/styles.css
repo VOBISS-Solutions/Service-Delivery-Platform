@@ -160,6 +160,80 @@ input, select, textarea {
   padding: 8px 10px;
 }
 
+.multi-filter {
+  position: relative;
+  min-width: 0;
+}
+
+.multi-filter-button {
+  width: 100%;
+  justify-content: flex-start;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #fff;
+}
+
+.multi-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 15;
+  display: none;
+  width: max(100%, 220px);
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.multi-filter.open .multi-filter-menu {
+  display: grid;
+  gap: 2px;
+}
+
+.multi-filter-option {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.multi-filter-option:hover {
+  background: #f4f7f5;
+}
+
+.multi-filter-option input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.multi-filter-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding-top: 8px;
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.multi-filter-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 textarea { resize: vertical; }
 
 .view { display: none; }

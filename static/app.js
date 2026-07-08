@@ -63,16 +63,22 @@ function filterParams() {
   const params = new URLSearchParams();
   const mapping = {
     q: '#searchInput',
-    status: '#statusFilter',
-    region: '#regionFilter',
-    service_type: '#serviceFilter',
-    archived: '#archiveFilter',
     from: '#fromFilter',
     to: '#toFilter',
   };
   Object.entries(mapping).forEach(([key, selector]) => {
     const value = $(selector).value;
     if (value) params.set(key, value);
+  });
+  const multiMapping = {
+    status: '#statusFilter',
+    region: '#regionFilter',
+    service_type: '#serviceFilter',
+    archived: '#archiveFilter',
+  };
+  Object.entries(multiMapping).forEach(([key, selector]) => {
+    const values = getMultiValues(selector);
+    if (values.length) params.set(key, values.join('|'));
   });
   return params;
 }
@@ -105,18 +111,73 @@ async function load() {
 }
 
 function renderOptions() {
-  fillSelect('#statusFilter', state.options.statuses || [], 'All statuses');
-  fillSelect('#regionFilter', state.options.region || state.options.region_name || state.options.region || [], 'All regions');
-  fillSelect('#serviceFilter', state.options.service_type || [], 'All services');
+  fillMultiFilter('#statusFilter', state.options.statuses || []);
+  fillMultiFilter('#regionFilter', state.options.region || state.options.region_name || state.options.region || []);
+  fillMultiFilter('#serviceFilter', state.options.service_type || []);
+  fillMultiFilter('#archiveFilter', [
+    { label: 'Active', value: '0' },
+    { label: 'Archived', value: '1' },
+  ]);
   const statusSelect = $('#projectForm select[name="status"]');
   statusSelect.innerHTML = (state.options.statuses || []).map((item) => `<option>${escapeHtml(item)}</option>`).join('');
 }
 
-function fillSelect(selector, values, firstLabel) {
+function getMultiValues(selector) {
+  return Array.from(document.querySelectorAll(`${selector} input[type="checkbox"]:checked`)).map((input) => input.value);
+}
+
+function fillMultiFilter(selector, values) {
   const el = $(selector);
-  const current = el.value;
-  el.innerHTML = `<option value="">${firstLabel}</option>` + values.map((item) => `<option>${escapeHtml(item)}</option>`).join('');
-  el.value = current;
+  const selected = new Set(getMultiValues(selector));
+  const placeholder = el.dataset.placeholder;
+  const normalized = values.map((item) => (typeof item === 'string' ? { label: item, value: item } : item));
+  const selectedLabels = normalized.filter((item) => selected.has(String(item.value))).map((item) => item.label);
+  const label = selectedLabels.length ? selectedLabels.join(', ') : placeholder;
+  el.innerHTML = `
+    <button type="button" class="multi-filter-button" aria-expanded="false">${escapeHtml(label)}</button>
+    <div class="multi-filter-menu">
+      ${normalized.map((item) => `
+        <label class="multi-filter-option">
+          <input type="checkbox" value="${escapeHtml(item.value)}" ${selected.has(String(item.value)) ? 'checked' : ''}>
+          <span>${escapeHtml(item.label)}</span>
+        </label>
+      `).join('')}
+      <div class="multi-filter-actions">
+        <button type="button" data-filter-clear>Clear</button>
+        <button type="button" class="primary" data-filter-apply>Apply</button>
+      </div>
+    </div>
+  `;
+  const button = el.querySelector('.multi-filter-button');
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeMultiFilters(el);
+    el.classList.toggle('open');
+    button.setAttribute('aria-expanded', String(el.classList.contains('open')));
+  });
+  el.querySelector('.multi-filter-menu').addEventListener('click', (event) => event.stopPropagation());
+  el.querySelector('[data-filter-clear]').addEventListener('click', () => {
+    el.querySelectorAll('input[type="checkbox"]').forEach((input) => { input.checked = false; });
+  });
+  el.querySelector('[data-filter-apply]').addEventListener('click', () => {
+    closeMultiFilters();
+    load();
+  });
+}
+
+function closeMultiFilters(except = null) {
+  $$('.multi-filter.open').forEach((filter) => {
+    if (filter === except) return;
+    filter.classList.remove('open');
+    const button = filter.querySelector('.multi-filter-button');
+    if (button) button.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function clearMultiFilter(selector) {
+  document.querySelectorAll(`${selector} input[type="checkbox"]`).forEach((input) => {
+    input.checked = false;
+  });
 }
 
 function render() {
@@ -386,13 +447,15 @@ function bindEvents() {
     if (file) importExcel(file);
     event.target.value = '';
   });
-  ['#searchInput', '#statusFilter', '#regionFilter', '#serviceFilter', '#archiveFilter', '#fromFilter', '#toFilter']
+  ['#searchInput', '#fromFilter', '#toFilter']
     .forEach((selector) => $(selector).addEventListener('input', load));
   $('#clearFilters').addEventListener('click', () => {
-    ['#searchInput', '#statusFilter', '#regionFilter', '#serviceFilter', '#archiveFilter', '#fromFilter', '#toFilter']
+    ['#searchInput', '#fromFilter', '#toFilter']
       .forEach((selector) => { $(selector).value = ''; });
+    ['#statusFilter', '#regionFilter', '#serviceFilter', '#archiveFilter'].forEach(clearMultiFilter);
     load();
   });
+  document.addEventListener('click', () => closeMultiFilters());
   $$('[data-report]').forEach((btn) => btn.addEventListener('click', () => {
     state.activeReport = btn.dataset.report;
     renderReport();
