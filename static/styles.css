@@ -318,6 +318,36 @@ textarea { resize: vertical; }
   overflow: auto;
 }
 
+.project-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.total-chip {
+  min-height: 78px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.total-chip span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.total-chip strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 18px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -575,6 +605,7 @@ input:disabled {
   .top-actions { justify-content: stretch; }
   .top-actions > * { flex: 1; }
   .dashboard-grid, .metrics, .material-grid, .report-grid, .filters { grid-template-columns: 1fr; }
+  .project-totals { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
   .dialog-actions { grid-template-columns: 1fr; }
   .bar-row { grid-template-columns: 96px 1fr 42px; }

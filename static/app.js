@@ -100,7 +100,7 @@ async function load() {
   const params = filterParams();
   const [projects, summary, options] = await Promise.all([
     api(`/api/projects?${params}`),
-    api('/api/summary'),
+    api(`/api/summary?${params}`),
     api('/api/options'),
   ]);
   state.projects = projects.projects;
@@ -189,7 +189,10 @@ function render() {
   renderMaterials();
   renderDelayed();
   renderRecent();
-  if (state.activeView === 'projects') renderProjects();
+  if (state.activeView === 'projects') {
+    renderProjectTotals();
+    renderProjects();
+  }
   if (state.activeView === 'reports') renderReport();
 }
 
@@ -205,6 +208,38 @@ function renderMetrics() {
   ];
   $('#metrics').innerHTML = metrics.map(([label, value]) => `
     <article class="metric"><span>${label}</span><strong>${value ?? 0}</strong></article>
+  `).join('');
+}
+
+function moneyWithCurrency(currency, value) {
+  return `${currency} ${money(value)}`;
+}
+
+function formatCurrencyTotals(field) {
+  const groups = state.summary.financials_by_currency || {};
+  const entries = Object.entries(groups).filter(([, totals]) => Number(totals[field] || 0) !== 0);
+  if (!entries.length) return '0';
+  return entries.map(([currency, totals]) => moneyWithCurrency(currency, totals[field])).join(' / ');
+}
+
+function renderProjectTotals() {
+  const materials = state.summary.materials || {};
+  const costs = state.summary.costs || {};
+  const totals = [
+    ['Filtered Rows', number(state.summary.total_projects)],
+    ['MRC', formatCurrencyTotals('mrc')],
+    ['NRC', formatCurrencyTotals('nrc')],
+    ['9m Poles', number(materials.poles_9m)],
+    ['11m Poles', number(materials.poles_11m)],
+    ['ADSS', number(materials.planned_adss_distance_m)],
+    ['Drop', number(materials.planned_drop_distance_m)],
+    ['Total Cost', money(costs.total_cost)],
+  ];
+  $('#projectTotals').innerHTML = totals.map(([label, value]) => `
+    <article class="total-chip">
+      <span>${label}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </article>
   `).join('');
 }
 
@@ -330,7 +365,10 @@ function switchView(view) {
   $$('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
   $('#viewTitle').textContent = titles[view][0];
   $('#viewSubtitle').textContent = titles[view][1];
-  if (view === 'projects') renderProjects();
+  if (view === 'projects') {
+    renderProjectTotals();
+    renderProjects();
+  }
   if (view === 'reports') renderReport();
 }
 

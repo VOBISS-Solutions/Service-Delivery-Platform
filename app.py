@@ -608,8 +608,8 @@ def cleanup_duplicate_import_rows(conn) -> int:
     return len(blank_rows) + len(rows)
 
 
-def summary() -> dict:
-    projects = get_projects({})
+def summary(query: dict | None = None) -> dict:
+    projects = get_projects(query or {})
     active = [p for p in projects if not p["archived"]]
     completed = [p for p in projects if p["status"] == "Completed"]
     delayed = [p for p in active if p["is_delayed"]]
@@ -629,6 +629,13 @@ def summary() -> dict:
     for p in active:
         bucket = p["aging_bucket"]
         aging[bucket] = aging.get(bucket, 0) + 1
+
+    financials_by_currency = {}
+    for p in projects:
+        currency = (p.get("currency") or "Unassigned").upper()
+        financials_by_currency.setdefault(currency, {"mrc": 0, "nrc": 0})
+        financials_by_currency[currency]["mrc"] += float(p.get("mrc") or 0)
+        financials_by_currency[currency]["nrc"] += float(p.get("nrc") or 0)
 
     today_date = today()
     week_start = today_date.fromordinal(today_date.toordinal() - today_date.weekday())
@@ -650,6 +657,7 @@ def summary() -> dict:
         "average_completion_days": round(sum(completed_with_age) / len(completed_with_age), 1) if completed_with_age else 0,
         "mrc": sum(float(p.get("mrc") or 0) for p in projects),
         "nrc": sum(float(p.get("nrc") or 0) for p in projects),
+        "financials_by_currency": financials_by_currency,
         "materials": {
             "planned_adss_distance_m": sum(float(p.get("planned_adss_distance_m") or 0) for p in projects),
             "planned_drop_distance_m": sum(float(p.get("planned_drop_distance_m") or 0) for p in projects),
@@ -857,7 +865,7 @@ class TrackerHandler(BaseHTTPRequestHandler):
         if path == "/api/projects":
             return json_response(self, {"projects": get_projects(query)})
         if path == "/api/summary":
-            return json_response(self, summary())
+            return json_response(self, summary(query))
         if path == "/api/options":
             return json_response(self, distinct_options())
         if path == "/api/export":
