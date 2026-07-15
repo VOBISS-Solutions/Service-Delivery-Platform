@@ -318,6 +318,12 @@ textarea { resize: vertical; }
   overflow: auto;
 }
 
+.project-table-wrap {
+  max-height: calc(100vh - 334px);
+  min-height: 320px;
+  position: relative;
+}
+
 .project-totals {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));
@@ -610,6 +616,10 @@ input:disabled {
   .top-actions > * { flex: 1; }
   .dashboard-grid, .metrics, .material-grid, .report-grid, .filters { grid-template-columns: 1fr; }
   .project-totals { grid-template-columns: 1fr; }
+  .project-table-wrap {
+    max-height: calc(100vh - 390px);
+    min-height: 280px;
+  }
   .form-grid { grid-template-columns: 1fr; }
   .dialog-actions { grid-template-columns: 1fr; }
   .bar-row { grid-template-columns: 96px 1fr 42px; }
