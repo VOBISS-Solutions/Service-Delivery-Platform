@@ -347,7 +347,12 @@ function renderProjects() {
         </select>
         ${p.is_delayed ? '<span class="delay-pill">Delayed</span>' : ''}
       </td>
-      ${isPocView ? `<td>${pocWindowCell(p)}</td>` : ''}
+      ${isPocView ? `
+      <td><input class="table-date-input" type="date" data-poc-date-id="${p.id}" data-poc-date-field="poc_start_date" value="${escapeHtml(p.poc_start_date || '')}"></td>
+      <td><input class="table-date-input" type="date" data-poc-date-id="${p.id}" data-poc-date-field="poc_end_date" value="${escapeHtml(p.poc_end_date || '')}"></td>
+      <td><strong>${number(p.poc_duration_days)}</strong><div class="muted">days</div></td>
+      <td>${pocTrackingCell(p)}</td>
+      ` : ''}
       ${isPocView ? '' : `
       <td>${escapeHtml(p.target_completion_date || '')}</td>
       <td>${p.aging_days ?? ''}<div class="muted">${escapeHtml(p.aging_bucket)}</div></td>
@@ -378,11 +383,15 @@ function renderProjects() {
     select.addEventListener('dblclick', (event) => event.stopPropagation());
     select.addEventListener('change', () => updateProjectStatus(Number(select.dataset.statusId), select.value));
   });
+  $$('[data-poc-date-id]').forEach((input) => {
+    input.addEventListener('dblclick', (event) => event.stopPropagation());
+    input.addEventListener('change', () => updateProjectPocDate(Number(input.dataset.pocDateId), input.dataset.pocDateField, input.value));
+  });
 }
 
 function projectColumns() {
   const shared = ['Project', 'Customer / Site', 'Region', 'Service', 'Status'];
-  if (state.activeView === 'poc') return [...shared, 'POC Window'];
+  if (state.activeView === 'poc') return [...shared, 'Start Date', 'End Date', 'Duration', 'Tracking'];
   return [...shared, 'Target', 'Age', 'Currency', 'MRC', 'NRC', '9m', '11m', 'ADSS', 'Drop', 'Total Cost', ''];
 }
 
@@ -395,8 +404,10 @@ function renderProjectHeader() {
   $('#projectHeaderRow').innerHTML = projectColumns().map((label) => `<th>${escapeHtml(label)}</th>`).join('');
 }
 
-function pocWindowCell(project) {
-  return `<strong>${escapeHtml(project.poc_state || '')}</strong><div class="muted">${escapeHtml(project.poc_start_date || '')} to ${escapeHtml(project.poc_end_date || '')}</div><div class="muted">${project.poc_days_remaining ?? ''} days left</div>`;
+function pocTrackingCell(project) {
+  const stateClass = String(project.poc_state || '').toLowerCase().replace(/\s+/g, '-');
+  const daysText = project.poc_days_remaining == null ? '' : `${project.poc_days_remaining} days left`;
+  return `<span class="poc-state ${escapeHtml(stateClass)}">${escapeHtml(project.poc_state || 'Needs dates')}</span><div class="muted">${escapeHtml(daysText)}</div>`;
 }
 
 function renderReport() {
@@ -519,6 +530,33 @@ async function updateProjectStatus(id, status) {
       body: JSON.stringify(payload),
     });
     toast('Status updated');
+    await load();
+  } catch (error) {
+    toast(error.message);
+    await load();
+  }
+}
+
+async function updateProjectPocDate(id, field, value) {
+  const project = state.projects.find((item) => item.id === id);
+  if (!project || !['poc_start_date', 'poc_end_date'].includes(field)) return;
+  const payload = {};
+  fields.forEach((projectField) => {
+    payload[projectField] = project[projectField] ?? '';
+  });
+  payload.work_stream = 'POC / Temporary';
+  payload[field] = value;
+  if (!payload.poc_start_date || !payload.poc_end_date) {
+    toast('POC start and end dates are required');
+    await load();
+    return;
+  }
+  try {
+    await api(`/api/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    toast('POC window updated');
     await load();
   } catch (error) {
     toast(error.message);
