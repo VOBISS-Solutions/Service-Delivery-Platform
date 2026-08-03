@@ -318,26 +318,6 @@ textarea { resize: vertical; }
   overflow: auto;
 }
 
-.stream-tabs {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.stream-tab {
-  min-height: 36px;
-  border-color: var(--line);
-  background: #fff;
-  font-weight: 700;
-}
-
-.stream-tab.active {
-  border-color: var(--accent);
-  background: #e6f4f1;
-  color: var(--accent-dark);
-}
-
 .project-table-wrap {
   max-height: calc(100vh - 334px);
   min-height: 320px;

@@ -4,14 +4,21 @@ const state = {
   options: {},
   activeView: 'dashboard',
   activeReport: 'customer_name',
-  activeStream: 'BAU',
 };
 
 const titles = {
   dashboard: ['Dashboard', 'Live project health, revenue, materials, and aging.'],
   projects: ['Projects', 'Fast searchable tracker for active and archived work.'],
+  iclick: ['iClick', 'Dedicated tracker for iClick requests.'],
+  poc: ['POC / Temporary', 'Temporary sites, trial periods, expiry flags, and follow-up status.'],
   analytics: ['Analytics', 'Aging, revenue, service mix, and planned materials.'],
   reports: ['Reports', 'Operational summaries for customers, regions, services, and status.'],
+};
+
+const workStreamByView = {
+  projects: 'BAU',
+  iclick: 'iClick',
+  poc: 'POC / Temporary',
 };
 
 const fields = [
@@ -81,8 +88,8 @@ function filterParams() {
     const values = getMultiValues(selector);
     if (values.length) params.set(key, values.join('|'));
   });
-  if (state.activeView === 'projects' && state.activeStream) {
-    params.set('work_stream', state.activeStream);
+  if (workStreamByView[state.activeView]) {
+    params.set('work_stream', workStreamByView[state.activeView]);
   }
   return params;
 }
@@ -193,8 +200,7 @@ function render() {
   renderMaterials();
   renderDelayed();
   renderRecent();
-  if (state.activeView === 'projects') {
-    renderStreamTabs();
+  if (workStreamByView[state.activeView]) {
     renderProjectTotals();
     renderProjects();
   }
@@ -241,7 +247,7 @@ function renderProjectTotals() {
     ['Drop', number(materials.planned_drop_distance_m)],
     ['Total Cost', money(costs.total_cost)],
   ];
-  if (state.activeStream === 'POC / Temporary') {
+  if (state.activeView === 'poc') {
     totals.splice(1, 0, ['Expired', number(poc.expired)], ['Expiring Soon', number(poc.expiring_soon)], ['Active POCs', number(poc.active)]);
   }
   $('#projectTotals').innerHTML = totals.map(([label, value]) => `
@@ -311,7 +317,7 @@ function renderRecent() {
 
 function renderProjects() {
   const visibleProjects = state.projects.slice(0, 300);
-  const isPocStream = state.activeStream === 'POC / Temporary';
+  const isPocStream = state.activeView === 'poc';
   $('#projectRows').innerHTML = visibleProjects.map((p) => `
     <tr data-project-id="${p.id}">
       <td><strong>${escapeHtml(p.project_id)}</strong>${p.archived ? '<span class="archive-pill">Archived</span>' : ''}<div class="muted">${escapeHtml(p.sn || '')}</div></td>
@@ -357,12 +363,6 @@ function renderProjects() {
   });
 }
 
-function renderStreamTabs() {
-  $$('.stream-tab').forEach((button) => {
-    button.classList.toggle('active', button.dataset.stream === state.activeStream);
-  });
-}
-
 function renderReport() {
   const groups = {};
   state.projects.forEach((p) => {
@@ -380,12 +380,12 @@ function renderReport() {
 
 function switchView(view) {
   state.activeView = view;
-  $$('.view').forEach((el) => el.classList.toggle('active', el.id === view));
+  const visibleView = workStreamByView[view] ? 'projects' : view;
+  $$('.view').forEach((el) => el.classList.toggle('active', el.id === visibleView));
   $$('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
   $('#viewTitle').textContent = titles[view][0];
   $('#viewSubtitle').textContent = titles[view][1];
-  if (view === 'projects') {
-    renderStreamTabs();
+  if (workStreamByView[view]) {
     renderProjectTotals();
     renderProjects();
   }
@@ -396,7 +396,7 @@ function openProject(id = null) {
   const form = $('#projectForm');
   form.reset();
   form.elements.currency.value = 'GHS';
-  form.elements.work_stream.value = state.activeStream || 'BAU';
+  form.elements.work_stream.value = workStreamByView[state.activeView] || 'BAU';
   $('#projectDbId').value = '';
   $('#deleteProject').style.visibility = id ? 'visible' : 'hidden';
   $('#dialogTitle').textContent = id ? 'Edit Project' : 'New Project';
@@ -524,11 +524,6 @@ function bindEvents() {
   $('#projectForm select[name="work_stream"]').addEventListener('change', updatePocFields);
   $('#projectForm input[name="poc_start_date"]').addEventListener('change', updatePocDuration);
   $('#projectForm input[name="poc_end_date"]').addEventListener('change', updatePocDuration);
-  $$('.stream-tab').forEach((button) => button.addEventListener('click', async () => {
-    state.activeStream = button.dataset.stream;
-    renderStreamTabs();
-    await load();
-  }));
   $('#deleteProject').addEventListener('click', deleteCurrentProject);
   $('#exportBtn').addEventListener('click', exportExcel);
   $('#logoutBtn').addEventListener('click', async () => {
