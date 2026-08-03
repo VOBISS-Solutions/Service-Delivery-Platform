@@ -313,6 +313,7 @@ def init_db() -> None:
                 )
                 """
             )
+        ensure_project_columns(conn)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)"
         )
@@ -325,20 +326,48 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_projects_work_stream ON projects(work_stream)"
         )
-        ensure_project_columns(conn)
 
 
 def ensure_project_columns(conn) -> None:
+    number_type = "DOUBLE PRECISION" if USING_POSTGRES else "REAL"
+    archived_type = "BOOLEAN DEFAULT FALSE" if USING_POSTGRES else "INTEGER DEFAULT 0"
     columns = {
         "work_stream": "TEXT DEFAULT 'BAU'",
+        "sn": "TEXT",
+        "customer_name": "TEXT DEFAULT 'Unnamed Customer'",
+        "site_name": "TEXT DEFAULT 'Unnamed Site'",
+        "location": "TEXT",
+        "region": "TEXT",
+        "capacity": "TEXT",
+        "bandwidth": number_type,
+        "planned_adss_distance_m": number_type,
+        "planned_drop_distance_m": number_type,
+        "service_type": "TEXT",
+        "cpe": "TEXT",
+        "confirmation_date": "TEXT",
+        "start_date": "TEXT",
+        "target_completion_date": "TEXT",
+        "completion_date": "TEXT",
         "poc_start_date": "TEXT",
         "poc_end_date": "TEXT",
-        "poc_duration_days": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
+        "poc_duration_days": f"{number_type} DEFAULT 0",
+        "status": "TEXT NOT NULL DEFAULT 'In-Progress'",
+        "remarks": "TEXT",
         "currency": "TEXT DEFAULT 'GHS'",
-        "pole_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
-        "transportation_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
-        "labour_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
-        "total_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
+        "mrc": f"{number_type} DEFAULT 0",
+        "nrc": f"{number_type} DEFAULT 0",
+        "poles_9m": f"{number_type} DEFAULT 0",
+        "poles_11m": f"{number_type} DEFAULT 0",
+        "pole_cost": f"{number_type} DEFAULT 0",
+        "transportation_cost": f"{number_type} DEFAULT 0",
+        "labour_cost": f"{number_type} DEFAULT 0",
+        "total_cost": f"{number_type} DEFAULT 0",
+        "labour": f"{number_type} DEFAULT 0",
+        "trench": f"{number_type} DEFAULT 0",
+        "parent_project_id": "TEXT",
+        "archived": archived_type,
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
     }
     if USING_POSTGRES:
         existing = {
