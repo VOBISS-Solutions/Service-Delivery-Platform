@@ -21,6 +21,12 @@ const workStreamByView = {
   poc: 'POC / Temporary',
 };
 
+const newButtonLabels = {
+  projects: 'New Project',
+  iclick: 'New iClick',
+  poc: 'New POC',
+};
+
 const fields = [
   'work_stream', 'customer_name', 'site_name', 'sn', 'parent_project_id', 'location', 'region',
   'capacity', 'bandwidth', 'service_type', 'cpe', 'currency', 'confirmation_date', 'start_date',
@@ -192,6 +198,7 @@ function clearMultiFilter(selector) {
 }
 
 function render() {
+  updateTopActions();
   renderMetrics();
   renderBars('#agingBars', state.summary.aging || {}, ['0-30', '31-60', '61-90', '91-120', '120+', 'Unconfirmed']);
   renderBars('#statusBars', state.summary.by_status || {});
@@ -205,6 +212,15 @@ function render() {
     renderProjects();
   }
   if (state.activeView === 'reports') renderReport();
+}
+
+function activeWorkStream() {
+  return workStreamByView[state.activeView] || 'BAU';
+}
+
+function updateTopActions() {
+  const button = $('#newProjectBtn');
+  button.textContent = newButtonLabels[state.activeView] || 'New Project';
 }
 
 function renderMetrics() {
@@ -317,7 +333,8 @@ function renderRecent() {
 
 function renderProjects() {
   const visibleProjects = state.projects.slice(0, 300);
-  const isPocStream = state.activeView === 'poc';
+  const isPocView = state.activeView === 'poc';
+  renderProjectHeader();
   $('#projectRows').innerHTML = visibleProjects.map((p) => `
     <tr data-project-id="${p.id}">
       <td><strong>${escapeHtml(p.project_id)}</strong>${p.archived ? '<span class="archive-pill">Archived</span>' : ''}<div class="muted">${escapeHtml(p.sn || '')}</div></td>
@@ -330,9 +347,8 @@ function renderProjects() {
         </select>
         ${p.is_delayed ? '<span class="delay-pill">Delayed</span>' : ''}
       </td>
-      <td>
-        ${isPocStream ? `<strong>${escapeHtml(p.poc_state || '')}</strong><div class="muted">${escapeHtml(p.poc_start_date || '')} to ${escapeHtml(p.poc_end_date || '')}</div><div class="muted">${p.poc_days_remaining ?? ''} days left</div>` : '<span class="muted">-</span>'}
-      </td>
+      ${isPocView ? `<td>${pocWindowCell(p)}</td>` : ''}
+      ${isPocView ? '' : `
       <td>${escapeHtml(p.target_completion_date || '')}</td>
       <td>${p.aging_days ?? ''}<div class="muted">${escapeHtml(p.aging_bucket)}</div></td>
       <td>${escapeHtml(p.currency || 'GHS')}</td>
@@ -344,12 +360,13 @@ function renderProjects() {
       <td>${number(p.planned_drop_distance_m)}</td>
       <td><strong>${money(p.total_cost)}</strong><div class="muted">Labour ${money(p.labour_cost)}</div></td>
       <td><button data-edit="${p.id}">Edit</button></td>
+      `}
     </tr>
-  `).join('') || '<tr><td colspan="17" class="muted">No projects match the current filters.</td></tr>';
+  `).join('') || `<tr><td colspan="${projectColumnCount()}" class="muted">No projects match the current filters.</td></tr>`;
   if (state.projects.length > visibleProjects.length) {
     $('#projectRows').insertAdjacentHTML(
       'beforeend',
-      `<tr><td colspan="17" class="muted">Showing first ${visibleProjects.length} of ${state.projects.length} projects. Use search or filters to narrow the list.</td></tr>`
+      `<tr><td colspan="${projectColumnCount()}" class="muted">Showing first ${visibleProjects.length} of ${state.projects.length} projects. Use search or filters to narrow the list.</td></tr>`
     );
   }
   $$('#projectRows tr[data-project-id]').forEach((row) => row.addEventListener('dblclick', (event) => {
@@ -361,6 +378,25 @@ function renderProjects() {
     select.addEventListener('dblclick', (event) => event.stopPropagation());
     select.addEventListener('change', () => updateProjectStatus(Number(select.dataset.statusId), select.value));
   });
+}
+
+function projectColumns() {
+  const shared = ['Project', 'Customer / Site', 'Region', 'Service', 'Status'];
+  if (state.activeView === 'poc') return [...shared, 'POC Window'];
+  return [...shared, 'Target', 'Age', 'Currency', 'MRC', 'NRC', '9m', '11m', 'ADSS', 'Drop', 'Total Cost', ''];
+}
+
+function projectColumnCount() {
+  return projectColumns().length;
+}
+
+function renderProjectHeader() {
+  $('.project-table-wrap table').classList.toggle('poc-table', state.activeView === 'poc');
+  $('#projectHeaderRow').innerHTML = projectColumns().map((label) => `<th>${escapeHtml(label)}</th>`).join('');
+}
+
+function pocWindowCell(project) {
+  return `<strong>${escapeHtml(project.poc_state || '')}</strong><div class="muted">${escapeHtml(project.poc_start_date || '')} to ${escapeHtml(project.poc_end_date || '')}</div><div class="muted">${project.poc_days_remaining ?? ''} days left</div>`;
 }
 
 function renderReport() {
@@ -385,6 +421,7 @@ function switchView(view) {
   $$('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
   $('#viewTitle').textContent = titles[view][0];
   $('#viewSubtitle').textContent = titles[view][1];
+  updateTopActions();
   if (workStreamByView[view]) {
     renderProjectTotals();
     renderProjects();
@@ -396,10 +433,11 @@ function openProject(id = null) {
   const form = $('#projectForm');
   form.reset();
   form.elements.currency.value = 'GHS';
-  form.elements.work_stream.value = workStreamByView[state.activeView] || 'BAU';
+  form.elements.work_stream.value = activeWorkStream();
+  form.elements.work_stream.disabled = Boolean(workStreamByView[state.activeView]);
   $('#projectDbId').value = '';
   $('#deleteProject').style.visibility = id ? 'visible' : 'hidden';
-  $('#dialogTitle').textContent = id ? 'Edit Project' : 'New Project';
+  $('#dialogTitle').textContent = id ? `Edit ${newButtonLabels[state.activeView] || 'Project'}` : (newButtonLabels[state.activeView] || 'New Project');
   if (id) {
     const project = state.projects.find((p) => p.id === id);
     $('#projectDbId').value = project.id;
@@ -441,6 +479,9 @@ async function saveForm(event) {
     if (!input) return;
     payload[field] = input.type === 'checkbox' ? input.checked : input.value;
   });
+  if (workStreamByView[state.activeView]) {
+    payload.work_stream = activeWorkStream();
+  }
   if (payload.work_stream === 'POC / Temporary' && (!payload.poc_start_date || !payload.poc_end_date)) {
     toast('POC start and end dates are required');
     return;
@@ -489,7 +530,9 @@ async function importExcel(file) {
   setBusy(true, 'Importing workbook', `Uploading ${file.name} and saving tracker rows.`);
   try {
     const bytes = await file.arrayBuffer();
-    const result = await api('/api/import', { method: 'POST', body: bytes });
+    const params = new URLSearchParams();
+    if (workStreamByView[state.activeView]) params.set('work_stream', activeWorkStream());
+    const result = await api(`/api/import?${params}`, { method: 'POST', body: bytes });
     const errorText = result.errors?.length ? `, ${result.errors.length} row errors` : '';
     const cleanupText = result.cleaned_duplicates ? `, cleaned ${result.cleaned_duplicates} duplicates` : '';
     toast(`Imported ${result.imported}, updated ${result.updated}${cleanupText}${errorText}`);
@@ -517,7 +560,13 @@ function bindEvents() {
     switchView(btn.dataset.view);
     await load();
   }));
-  $('#newProjectBtn').addEventListener('click', () => openProject());
+  $('#newProjectBtn').addEventListener('click', async () => {
+    if (!workStreamByView[state.activeView]) {
+      switchView('projects');
+      await load();
+    }
+    openProject();
+  });
   $('#closeDialog').addEventListener('click', () => $('#projectDialog').close());
   $('#cancelProject').addEventListener('click', () => $('#projectDialog').close());
   $('#projectForm').addEventListener('submit', saveForm);

@@ -360,6 +360,10 @@ table {
   min-width: 1460px;
 }
 
+.poc-table {
+  min-width: 760px;
+}
+
 th, td {
   padding: 12px;
   border-bottom: 1px solid var(--line);

@@ -921,7 +921,7 @@ def export_workbook(projects: list[dict]) -> bytes:
     return stream.getvalue()
 
 
-def import_workbook(file_bytes: bytes) -> dict:
+def import_workbook(file_bytes: bytes, forced_work_stream: str | None = None) -> dict:
     if load_workbook is None:
         raise RuntimeError("openpyxl is required for Excel import")
     wb = load_workbook(io.BytesIO(file_bytes), data_only=True)
@@ -948,6 +948,8 @@ def import_workbook(file_bytes: bytes) -> dict:
             for header, value in zip(headers, row):
                 if header:
                     payload[header] = value
+            if forced_work_stream:
+                payload["work_stream"] = forced_work_stream
             has_business_name = any(str(payload.get(field) or "").strip() for field in ("customer_name", "site_name"))
             has_project_id = bool(str(payload.get("project_id") or "").strip())
             if not any(payload.values()) or not (has_project_id or has_business_name):
@@ -1053,10 +1055,11 @@ class TrackerHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 return json_response(self, {"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         if parsed.path == "/api/import":
+            query = {k: v[0] for k, v in parse_qs(parsed.query).items()}
             length = int(self.headers.get("Content-Length", 0))
             file_bytes = self.rfile.read(length)
             try:
-                return json_response(self, import_workbook(file_bytes))
+                return json_response(self, import_workbook(file_bytes, query.get("work_stream")))
             except Exception as exc:
                 return json_response(self, {"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         return json_response(self, {"error": "Not found"}, HTTPStatus.NOT_FOUND)

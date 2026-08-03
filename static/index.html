@@ -106,25 +106,7 @@
       <div class="table-wrap project-table-wrap">
         <table>
           <thead>
-            <tr>
-              <th>Project</th>
-              <th>Customer / Site</th>
-              <th>Region</th>
-              <th>Service</th>
-              <th>Status</th>
-              <th>POC Window</th>
-              <th>Target</th>
-              <th>Age</th>
-              <th>Currency</th>
-              <th>MRC</th>
-              <th>NRC</th>
-              <th>9m</th>
-              <th>11m</th>
-              <th>ADSS</th>
-              <th>Drop</th>
-              <th>Total Cost</th>
-              <th></th>
-            </tr>
+            <tr id="projectHeaderRow"></tr>
           </thead>
           <tbody id="projectRows"></tbody>
         </table>
@@ -183,7 +165,7 @@
         <label>Service Type<input name="service_type"></label>
         <label>CPE<input name="cpe"></label>
         <label>Currency<input name="currency" value="GHS"></label>
-        <label>Work Stream<select name="work_stream">
+        <label class="stream-field">Work Stream<select name="work_stream">
           <option>BAU</option>
           <option>iClick</option>
           <option>POC / Temporary</option>
