@@ -44,6 +44,7 @@ STATUSES = [
     "Cancelled",
     "Survey",
 ]
+WORK_STREAMS = ["BAU", "iClick", "POC / Temporary"]
 
 STATUS_ALIASES = {
     "completed": "Completed",
@@ -64,6 +65,7 @@ STATUS_ALIASES = {
 }
 
 PROJECT_FIELDS = [
+    "work_stream",
     "sn",
     "customer_name",
     "site_name",
@@ -79,6 +81,9 @@ PROJECT_FIELDS = [
     "start_date",
     "target_completion_date",
     "completion_date",
+    "poc_start_date",
+    "poc_end_date",
+    "poc_duration_days",
     "status",
     "remarks",
     "currency",
@@ -109,6 +114,7 @@ NUMERIC_FIELDS = {
     "total_cost",
     "labour",
     "trench",
+    "poc_duration_days",
 }
 
 DATE_FIELDS = {
@@ -116,10 +122,17 @@ DATE_FIELDS = {
     "start_date",
     "target_completion_date",
     "completion_date",
+    "poc_start_date",
+    "poc_end_date",
 }
 
 HEADER_ALIASES = {
     "project id": "project_id",
+    "work stream": "work_stream",
+    "workstream": "work_stream",
+    "category": "work_stream",
+    "request type": "work_stream",
+    "tracker": "work_stream",
     "column1": "sn",
     "sn": "sn",
     "customer name": "customer_name",
@@ -149,6 +162,17 @@ HEADER_ALIASES = {
     "completion date": "completion_date",
     "delivery date": "completion_date",
     "date completed": "completion_date",
+    "poc start date": "poc_start_date",
+    "temporary start date": "poc_start_date",
+    "trial start date": "poc_start_date",
+    "poc end date": "poc_end_date",
+    "temporary end date": "poc_end_date",
+    "trial end date": "poc_end_date",
+    "expiry date": "poc_end_date",
+    "expiration date": "poc_end_date",
+    "duration": "poc_duration_days",
+    "duration days": "poc_duration_days",
+    "poc duration": "poc_duration_days",
     "status": "status",
     "remarks": "remarks",
     "comments": "remarks",
@@ -205,6 +229,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS projects (
                     id SERIAL PRIMARY KEY,
                     project_id TEXT NOT NULL UNIQUE,
+                    work_stream TEXT DEFAULT 'BAU',
                     sn TEXT,
                     customer_name TEXT NOT NULL,
                     site_name TEXT NOT NULL,
@@ -220,6 +245,9 @@ def init_db() -> None:
                     start_date TEXT,
                     target_completion_date TEXT,
                     completion_date TEXT,
+                    poc_start_date TEXT,
+                    poc_end_date TEXT,
+                    poc_duration_days DOUBLE PRECISION DEFAULT 0,
                     status TEXT NOT NULL DEFAULT 'In-Progress',
                     remarks TEXT,
                     currency TEXT DEFAULT 'GHS',
@@ -246,6 +274,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     project_id TEXT NOT NULL UNIQUE,
+                    work_stream TEXT DEFAULT 'BAU',
                     sn TEXT,
                     customer_name TEXT NOT NULL,
                     site_name TEXT NOT NULL,
@@ -261,6 +290,9 @@ def init_db() -> None:
                     start_date TEXT,
                     target_completion_date TEXT,
                     completion_date TEXT,
+                    poc_start_date TEXT,
+                    poc_end_date TEXT,
+                    poc_duration_days REAL DEFAULT 0,
                     status TEXT NOT NULL DEFAULT 'In-Progress',
                     remarks TEXT,
                     currency TEXT DEFAULT 'GHS',
@@ -290,11 +322,18 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_projects_customer ON projects(customer_name)"
         )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_projects_work_stream ON projects(work_stream)"
+        )
         ensure_project_columns(conn)
 
 
 def ensure_project_columns(conn) -> None:
     columns = {
+        "work_stream": "TEXT DEFAULT 'BAU'",
+        "poc_start_date": "TEXT",
+        "poc_end_date": "TEXT",
+        "poc_duration_days": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
         "currency": "TEXT DEFAULT 'GHS'",
         "pole_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
         "transportation_cost": "DOUBLE PRECISION DEFAULT 0" if USING_POSTGRES else "REAL DEFAULT 0",
@@ -367,6 +406,18 @@ def normalize_status(value) -> str:
     return STATUS_ALIASES.get(text.lower(), text if text in STATUSES else "In-Progress")
 
 
+def normalize_work_stream(value) -> str:
+    text = str(value or "").strip()
+    lower = text.lower().replace("-", " ").replace("_", " ")
+    if lower in {"", "bau", "project", "projects", "usual", "normal", "standard"}:
+        return "BAU"
+    if "iclick" in lower or "i click" in lower:
+        return "iClick"
+    if "poc" in lower or "proof" in lower or "temporary" in lower or "temp" in lower or "trial" in lower:
+        return "POC / Temporary"
+    return text if text in WORK_STREAMS else "BAU"
+
+
 def normalize_archived(value):
     archived = bool(normalize_bool(value))
     return archived if USING_POSTGRES else int(archived)
@@ -391,8 +442,20 @@ def normalize_project(payload: dict, existing_project_id: str | None = None) -> 
 
     data["customer_name"] = data["customer_name"] or "Unnamed Customer"
     data["site_name"] = data["site_name"] or "Unnamed Site"
+    data["work_stream"] = normalize_work_stream(data.get("work_stream"))
     data["currency"] = data["currency"] or "GHS"
     data["status"] = normalize_status(data["status"])
+    if data["work_stream"] == "POC / Temporary":
+        if not data.get("poc_start_date") and data.get("start_date"):
+            data["poc_start_date"] = data["start_date"]
+        if not data.get("poc_end_date") and data.get("target_completion_date"):
+            data["poc_end_date"] = data["target_completion_date"]
+        if not data.get("poc_start_date") or not data.get("poc_end_date"):
+            raise ValueError("POC / Temporary records require POC start and end dates")
+        start = parse_date(data.get("poc_start_date"))
+        end = parse_date(data.get("poc_end_date"))
+        if start and end:
+            data["poc_duration_days"] = max((end - start).days, 0)
     data["project_id"] = payload.get("project_id") or existing_project_id or make_project_id()
     apply_cost_calculations(data)
     return data
@@ -413,15 +476,37 @@ def row_to_project(row: sqlite3.Row) -> dict:
     project = dict(row)
     apply_cost_calculations(project)
     project["status"] = normalize_status(project.get("status"))
+    project["work_stream"] = normalize_work_stream(project.get("work_stream"))
     target = parse_date(project.get("target_completion_date"))
     confirmation = parse_date(project.get("confirmation_date"))
     completion = parse_date(project.get("completion_date"))
+    poc_start = parse_date(project.get("poc_start_date"))
+    poc_end = parse_date(project.get("poc_end_date"))
     end = completion or today()
     project["is_delayed"] = bool(target and target < today() and project["status"] not in {"Completed", "Cancelled"})
     project["aging_days"] = max((end - confirmation).days, 0) if confirmation else None
     project["aging_bucket"] = aging_bucket(project["aging_days"])
+    if project["work_stream"] == "POC / Temporary" and poc_start and poc_end:
+        project["poc_duration_days"] = max((poc_end - poc_start).days, 0)
+    project["poc_days_remaining"] = (poc_end - today()).days if poc_end else None
+    project["poc_state"] = poc_state(project)
     project["archived"] = bool(project["archived"])
     return project
+
+
+def poc_state(project: dict) -> str:
+    if project.get("work_stream") != "POC / Temporary":
+        return ""
+    if project.get("status") in {"Completed", "Cancelled"} or project.get("archived"):
+        return "Closed"
+    days = project.get("poc_days_remaining")
+    if days is None:
+        return "Needs dates"
+    if days < 0:
+        return "Expired"
+    if days <= 7:
+        return "Expiring soon"
+    return "Active"
 
 
 def aging_bucket(days) -> str:
@@ -456,6 +541,7 @@ def get_projects(query: dict) -> list[dict]:
         params.extend(values)
 
     add_in_clause("status", values_for("status"))
+    add_in_clause("work_stream", [normalize_work_stream(value) for value in values_for("work_stream")])
     add_in_clause("region", values_for("region"))
     add_in_clause("service_type", values_for("service_type"))
     add_in_clause("customer_name", values_for("customer"))
@@ -614,6 +700,7 @@ def summary(query: dict | None = None) -> dict:
     completed = [p for p in projects if p["status"] == "Completed"]
     delayed = [p for p in active if p["is_delayed"]]
     completed_with_age = [p["aging_days"] for p in completed if p["aging_days"] is not None]
+    poc_projects = [p for p in projects if p.get("work_stream") == "POC / Temporary"]
 
     def by_field(field: str, value_field: str | None = None):
         grouped = {}
@@ -658,6 +745,13 @@ def summary(query: dict | None = None) -> dict:
         "mrc": sum(float(p.get("mrc") or 0) for p in projects),
         "nrc": sum(float(p.get("nrc") or 0) for p in projects),
         "financials_by_currency": financials_by_currency,
+        "by_work_stream": by_field("work_stream"),
+        "poc": {
+            "active": len([p for p in poc_projects if p.get("poc_state") == "Active"]),
+            "expiring_soon": len([p for p in poc_projects if p.get("poc_state") == "Expiring soon"]),
+            "expired": len([p for p in poc_projects if p.get("poc_state") == "Expired"]),
+            "needs_dates": len([p for p in poc_projects if p.get("poc_state") == "Needs dates"]),
+        },
         "materials": {
             "planned_adss_distance_m": sum(float(p.get("planned_adss_distance_m") or 0) for p in projects),
             "planned_drop_distance_m": sum(float(p.get("planned_drop_distance_m") or 0) for p in projects),
@@ -688,12 +782,13 @@ def summary(query: dict | None = None) -> dict:
 def distinct_options() -> dict:
     with connect() as conn:
         options = {}
-        for field in ["customer_name", "region", "service_type", "status"]:
+        for field in ["customer_name", "region", "service_type", "status", "work_stream"]:
             rows = conn.execute(
                 f"SELECT DISTINCT {field} value FROM projects WHERE {field} IS NOT NULL AND {field} != '' ORDER BY {field}"
             ).fetchall()
             options[field] = [row["value"] for row in rows]
     options["statuses"] = STATUSES
+    options["work_streams"] = WORK_STREAMS
     return options
 
 
@@ -705,6 +800,7 @@ def export_workbook(projects: list[dict]) -> bytes:
     ws.title = "Projects"
     headers = [
         "Project ID",
+        "Work Stream",
         "SN",
         "Customer Name",
         "Site Name",
@@ -723,6 +819,11 @@ def export_workbook(projects: list[dict]) -> bytes:
         "Start Date",
         "Target Completion Date",
         "Completion Date",
+        "POC Start Date",
+        "POC End Date",
+        "POC Duration Days",
+        "POC State",
+        "POC Days Remaining",
         "Aging Days",
         "Aging Bucket",
         "Delayed",
@@ -743,6 +844,7 @@ def export_workbook(projects: list[dict]) -> bytes:
     for p in projects:
         ws.append([
             p.get("project_id"),
+            p.get("work_stream"),
             p.get("sn"),
             p.get("customer_name"),
             p.get("site_name"),
@@ -761,6 +863,11 @@ def export_workbook(projects: list[dict]) -> bytes:
             p.get("start_date"),
             p.get("target_completion_date"),
             p.get("completion_date"),
+            p.get("poc_start_date"),
+            p.get("poc_end_date"),
+            p.get("poc_duration_days"),
+            p.get("poc_state"),
+            p.get("poc_days_remaining"),
             p.get("aging_days"),
             p.get("aging_bucket"),
             "Yes" if p.get("is_delayed") else "No",

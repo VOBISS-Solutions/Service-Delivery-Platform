@@ -4,6 +4,7 @@ const state = {
   options: {},
   activeView: 'dashboard',
   activeReport: 'customer_name',
+  activeStream: 'BAU',
 };
 
 const titles = {
@@ -14,9 +15,9 @@ const titles = {
 };
 
 const fields = [
-  'customer_name', 'site_name', 'sn', 'parent_project_id', 'location', 'region',
+  'work_stream', 'customer_name', 'site_name', 'sn', 'parent_project_id', 'location', 'region',
   'capacity', 'bandwidth', 'service_type', 'cpe', 'currency', 'confirmation_date', 'start_date',
-  'target_completion_date', 'completion_date', 'status', 'mrc', 'nrc',
+  'target_completion_date', 'completion_date', 'poc_start_date', 'poc_end_date', 'poc_duration_days', 'status', 'mrc', 'nrc',
   'planned_adss_distance_m', 'planned_drop_distance_m', 'poles_9m', 'poles_11m',
   'labour', 'trench', 'archived', 'remarks',
 ];
@@ -80,6 +81,9 @@ function filterParams() {
     const values = getMultiValues(selector);
     if (values.length) params.set(key, values.join('|'));
   });
+  if (state.activeView === 'projects' && state.activeStream) {
+    params.set('work_stream', state.activeStream);
+  }
   return params;
 }
 
@@ -190,6 +194,7 @@ function render() {
   renderDelayed();
   renderRecent();
   if (state.activeView === 'projects') {
+    renderStreamTabs();
     renderProjectTotals();
     renderProjects();
   }
@@ -225,6 +230,7 @@ function formatCurrencyTotals(field) {
 function renderProjectTotals() {
   const materials = state.summary.materials || {};
   const costs = state.summary.costs || {};
+  const poc = state.summary.poc || {};
   const totals = [
     ['Filtered Rows', number(state.summary.total_projects)],
     ['MRC', formatCurrencyTotals('mrc')],
@@ -235,6 +241,9 @@ function renderProjectTotals() {
     ['Drop', number(materials.planned_drop_distance_m)],
     ['Total Cost', money(costs.total_cost)],
   ];
+  if (state.activeStream === 'POC / Temporary') {
+    totals.splice(1, 0, ['Expired', number(poc.expired)], ['Expiring Soon', number(poc.expiring_soon)], ['Active POCs', number(poc.active)]);
+  }
   $('#projectTotals').innerHTML = totals.map(([label, value]) => `
     <article class="total-chip">
       <span>${label}</span>
@@ -302,6 +311,7 @@ function renderRecent() {
 
 function renderProjects() {
   const visibleProjects = state.projects.slice(0, 300);
+  const isPocStream = state.activeStream === 'POC / Temporary';
   $('#projectRows').innerHTML = visibleProjects.map((p) => `
     <tr data-project-id="${p.id}">
       <td><strong>${escapeHtml(p.project_id)}</strong>${p.archived ? '<span class="archive-pill">Archived</span>' : ''}<div class="muted">${escapeHtml(p.sn || '')}</div></td>
@@ -313,6 +323,9 @@ function renderProjects() {
           ${(state.options.statuses || []).map((status) => `<option value="${escapeHtml(status)}" ${status === p.status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}
         </select>
         ${p.is_delayed ? '<span class="delay-pill">Delayed</span>' : ''}
+      </td>
+      <td>
+        ${isPocStream ? `<strong>${escapeHtml(p.poc_state || '')}</strong><div class="muted">${escapeHtml(p.poc_start_date || '')} to ${escapeHtml(p.poc_end_date || '')}</div><div class="muted">${p.poc_days_remaining ?? ''} days left</div>` : '<span class="muted">-</span>'}
       </td>
       <td>${escapeHtml(p.target_completion_date || '')}</td>
       <td>${p.aging_days ?? ''}<div class="muted">${escapeHtml(p.aging_bucket)}</div></td>
@@ -326,11 +339,11 @@ function renderProjects() {
       <td><strong>${money(p.total_cost)}</strong><div class="muted">Labour ${money(p.labour_cost)}</div></td>
       <td><button data-edit="${p.id}">Edit</button></td>
     </tr>
-  `).join('') || '<tr><td colspan="16" class="muted">No projects match the current filters.</td></tr>';
+  `).join('') || '<tr><td colspan="17" class="muted">No projects match the current filters.</td></tr>';
   if (state.projects.length > visibleProjects.length) {
     $('#projectRows').insertAdjacentHTML(
       'beforeend',
-      `<tr><td colspan="16" class="muted">Showing first ${visibleProjects.length} of ${state.projects.length} projects. Use search or filters to narrow the list.</td></tr>`
+      `<tr><td colspan="17" class="muted">Showing first ${visibleProjects.length} of ${state.projects.length} projects. Use search or filters to narrow the list.</td></tr>`
     );
   }
   $$('#projectRows tr[data-project-id]').forEach((row) => row.addEventListener('dblclick', (event) => {
@@ -341,6 +354,12 @@ function renderProjects() {
   $$('[data-status-id]').forEach((select) => {
     select.addEventListener('dblclick', (event) => event.stopPropagation());
     select.addEventListener('change', () => updateProjectStatus(Number(select.dataset.statusId), select.value));
+  });
+}
+
+function renderStreamTabs() {
+  $$('.stream-tab').forEach((button) => {
+    button.classList.toggle('active', button.dataset.stream === state.activeStream);
   });
 }
 
@@ -366,6 +385,7 @@ function switchView(view) {
   $('#viewTitle').textContent = titles[view][0];
   $('#viewSubtitle').textContent = titles[view][1];
   if (view === 'projects') {
+    renderStreamTabs();
     renderProjectTotals();
     renderProjects();
   }
@@ -376,6 +396,7 @@ function openProject(id = null) {
   const form = $('#projectForm');
   form.reset();
   form.elements.currency.value = 'GHS';
+  form.elements.work_stream.value = state.activeStream || 'BAU';
   $('#projectDbId').value = '';
   $('#deleteProject').style.visibility = id ? 'visible' : 'hidden';
   $('#dialogTitle').textContent = id ? 'Edit Project' : 'New Project';
@@ -389,7 +410,26 @@ function openProject(id = null) {
       else input.value = project[field] ?? '';
     });
   }
+  updatePocFields();
   $('#projectDialog').showModal();
+}
+
+function updatePocFields() {
+  const form = $('#projectForm');
+  const isPoc = form.elements.work_stream.value === 'POC / Temporary';
+  $$('.poc-field').forEach((field) => field.classList.toggle('hidden', !isPoc));
+  form.elements.poc_start_date.required = isPoc;
+  form.elements.poc_end_date.required = isPoc;
+  if (isPoc) updatePocDuration();
+}
+
+function updatePocDuration() {
+  const form = $('#projectForm');
+  const start = form.elements.poc_start_date.value;
+  const end = form.elements.poc_end_date.value;
+  if (!start || !end) return;
+  const days = Math.max(Math.round((new Date(end) - new Date(start)) / 86400000), 0);
+  form.elements.poc_duration_days.value = Number.isFinite(days) ? days : '';
 }
 
 async function saveForm(event) {
@@ -401,6 +441,10 @@ async function saveForm(event) {
     if (!input) return;
     payload[field] = input.type === 'checkbox' ? input.checked : input.value;
   });
+  if (payload.work_stream === 'POC / Temporary' && (!payload.poc_start_date || !payload.poc_end_date)) {
+    toast('POC start and end dates are required');
+    return;
+  }
   const id = $('#projectDbId').value;
   await api(id ? `/api/projects/${id}` : '/api/projects', {
     method: id ? 'PUT' : 'POST',
@@ -469,11 +513,22 @@ function exportExcel() {
 }
 
 function bindEvents() {
-  $$('.nav-item').forEach((btn) => btn.addEventListener('click', () => switchView(btn.dataset.view)));
+  $$('.nav-item').forEach((btn) => btn.addEventListener('click', async () => {
+    switchView(btn.dataset.view);
+    await load();
+  }));
   $('#newProjectBtn').addEventListener('click', () => openProject());
   $('#closeDialog').addEventListener('click', () => $('#projectDialog').close());
   $('#cancelProject').addEventListener('click', () => $('#projectDialog').close());
   $('#projectForm').addEventListener('submit', saveForm);
+  $('#projectForm select[name="work_stream"]').addEventListener('change', updatePocFields);
+  $('#projectForm input[name="poc_start_date"]').addEventListener('change', updatePocDuration);
+  $('#projectForm input[name="poc_end_date"]').addEventListener('change', updatePocDuration);
+  $$('.stream-tab').forEach((button) => button.addEventListener('click', async () => {
+    state.activeStream = button.dataset.stream;
+    renderStreamTabs();
+    await load();
+  }));
   $('#deleteProject').addEventListener('click', deleteCurrentProject);
   $('#exportBtn').addEventListener('click', exportExcel);
   $('#logoutBtn').addEventListener('click', async () => {

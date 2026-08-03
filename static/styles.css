@@ -318,6 +318,26 @@ textarea { resize: vertical; }
   overflow: auto;
 }
 
+.stream-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.stream-tab {
+  min-height: 36px;
+  border-color: var(--line);
+  background: #fff;
+  font-weight: 700;
+}
+
+.stream-tab.active {
+  border-color: var(--accent);
+  background: #e6f4f1;
+  color: var(--accent-dark);
+}
+
 .project-table-wrap {
   max-height: calc(100vh - 334px);
   min-height: 320px;
@@ -357,7 +377,7 @@ textarea { resize: vertical; }
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1320px;
+  min-width: 1460px;
 }
 
 th, td {
@@ -490,6 +510,7 @@ label {
 }
 
 label.full { grid-column: 1 / -1; }
+.hidden { display: none !important; }
 label.check {
   align-content: end;
   grid-template-columns: auto 1fr;

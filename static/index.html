@@ -100,6 +100,11 @@
     </section>
 
     <section id="projects" class="view">
+      <div class="stream-tabs" role="tablist" aria-label="Project work streams">
+        <button type="button" class="stream-tab active" data-stream="BAU">BAU Projects</button>
+        <button type="button" class="stream-tab" data-stream="iClick">iClick</button>
+        <button type="button" class="stream-tab" data-stream="POC / Temporary">POC / Temporary</button>
+      </div>
       <section class="project-totals" id="projectTotals"></section>
       <div class="table-wrap project-table-wrap">
         <table>
@@ -110,6 +115,7 @@
               <th>Region</th>
               <th>Service</th>
               <th>Status</th>
+              <th>POC Window</th>
               <th>Target</th>
               <th>Age</th>
               <th>Currency</th>
@@ -180,10 +186,18 @@
         <label>Service Type<input name="service_type"></label>
         <label>CPE<input name="cpe"></label>
         <label>Currency<input name="currency" value="GHS"></label>
+        <label>Work Stream<select name="work_stream">
+          <option>BAU</option>
+          <option>iClick</option>
+          <option>POC / Temporary</option>
+        </select></label>
         <label>Confirmation Date<input name="confirmation_date" type="date"></label>
         <label>Start Date<input name="start_date" type="date"></label>
         <label>Target Completion<input name="target_completion_date" type="date"></label>
         <label>Completion Date<input name="completion_date" type="date"></label>
+        <label class="poc-field">POC Start<input name="poc_start_date" type="date"></label>
+        <label class="poc-field">POC End<input name="poc_end_date" type="date"></label>
+        <label class="poc-field">POC Duration<input name="poc_duration_days" type="number" step="1" readonly></label>
         <label>Status<select name="status"></select></label>
         <label>MRC<input name="mrc" type="number" step="0.01"></label>
         <label>NRC<input name="nrc" type="number" step="0.01"></label>
