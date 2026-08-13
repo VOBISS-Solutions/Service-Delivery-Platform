@@ -448,6 +448,7 @@ function openProject(id = null) {
   form.elements.work_stream.disabled = Boolean(workStreamByView[state.activeView]);
   $('#projectDbId').value = '';
   $('#deleteProject').style.visibility = id ? 'visible' : 'hidden';
+  $('#duplicateProject').style.visibility = id ? 'visible' : 'hidden';
   $('#dialogTitle').textContent = id ? `Edit ${newButtonLabels[state.activeView] || 'Project'}` : (newButtonLabels[state.activeView] || 'New Project');
   if (id) {
     const project = state.projects.find((p) => p.id === id);
@@ -483,6 +484,19 @@ function updatePocDuration() {
 
 async function saveForm(event) {
   event.preventDefault();
+  const payload = projectPayloadFromForm();
+  if (!payload) return;
+  const id = $('#projectDbId').value;
+  await api(id ? `/api/projects/${id}` : '/api/projects', {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(payload),
+  });
+  $('#projectDialog').close();
+  toast('Project saved');
+  await load();
+}
+
+function projectPayloadFromForm() {
   const form = $('#projectForm');
   const payload = {};
   fields.forEach((field) => {
@@ -495,15 +509,21 @@ async function saveForm(event) {
   }
   if (payload.work_stream === 'POC / Temporary' && (!payload.poc_start_date || !payload.poc_end_date)) {
     toast('POC start and end dates are required');
-    return;
+    return null;
   }
-  const id = $('#projectDbId').value;
-  await api(id ? `/api/projects/${id}` : '/api/projects', {
-    method: id ? 'PUT' : 'POST',
+  return payload;
+}
+
+async function duplicateCurrentProject() {
+  if (!$('#projectDbId').value) return;
+  const payload = projectPayloadFromForm();
+  if (!payload) return;
+  await api('/api/projects', {
+    method: 'POST',
     body: JSON.stringify(payload),
   });
   $('#projectDialog').close();
-  toast('Project saved');
+  toast('Saved as new project');
   await load();
 }
 
@@ -608,6 +628,7 @@ function bindEvents() {
   $('#closeDialog').addEventListener('click', () => $('#projectDialog').close());
   $('#cancelProject').addEventListener('click', () => $('#projectDialog').close());
   $('#projectForm').addEventListener('submit', saveForm);
+  $('#duplicateProject').addEventListener('click', duplicateCurrentProject);
   $('#projectForm select[name="work_stream"]').addEventListener('change', updatePocFields);
   $('#projectForm input[name="poc_start_date"]').addEventListener('change', updatePocDuration);
   $('#projectForm input[name="poc_end_date"]').addEventListener('change', updatePocDuration);
