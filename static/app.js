@@ -9,7 +9,7 @@ const state = {
 const titles = {
   dashboard: ['Dashboard', 'Live project health, revenue, materials, and aging.'],
   projects: ['Projects', 'Fast searchable tracker for active and archived work.'],
-  iclick: ['iClick', 'Dedicated tracker for iClick requests.'],
+  iclick: ['iKlick', 'Dedicated tracker for iKlick requests.'],
   poc: ['POC / Temporary', 'Temporary sites, trial periods, expiry flags, and follow-up status.'],
   analytics: ['Analytics', 'Aging, revenue, service mix, and planned materials.'],
   reports: ['Reports', 'Operational summaries for customers, regions, services, and status.'],
@@ -23,7 +23,7 @@ const workStreamByView = {
 
 const newButtonLabels = {
   projects: 'New Project',
-  iclick: 'New iClick',
+  iclick: 'New iKlick',
   poc: 'New POC',
 };
 

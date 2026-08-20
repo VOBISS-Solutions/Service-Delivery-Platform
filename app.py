@@ -440,7 +440,7 @@ def normalize_work_stream(value) -> str:
     lower = text.lower().replace("-", " ").replace("_", " ")
     if lower in {"", "bau", "project", "projects", "usual", "normal", "standard"}:
         return "BAU"
-    if "iclick" in lower or "i click" in lower:
+    if "iclick" in lower or "i click" in lower or "iklick" in lower or "i klick" in lower:
         return "iClick"
     if "poc" in lower or "proof" in lower or "temporary" in lower or "temp" in lower or "trial" in lower:
         return "POC / Temporary"
