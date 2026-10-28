@@ -5,17 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Service Delivery Tracker</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/delivery-design.css">
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand">
-      <span class="brand-mark">SD</span>
       <div>
-        <strong>Delivery Tracker</strong>
-        <span>Projects & deployment</span>
+        <strong>VOBISS</strong>
+        <span>Service delivery</span>
       </div>
     </div>
-    <nav>
+    <div class="workspace-label">Workspace</div>
+    <nav aria-label="Workspace">
       <button class="nav-item active" data-view="dashboard">Dashboard</button>
       <button class="nav-item" data-view="projects">Projects</button>
       <button class="nav-item" data-view="iclick">iKlick</button>
@@ -26,6 +27,7 @@
   </aside>
 
   <main>
+    <div class="workspace-bar">Workspace <span aria-hidden="true">/</span> <strong id="workspaceView">Dashboard</strong></div>
     <header class="topbar">
       <div>
         <h1 id="viewTitle">Dashboard</h1>
@@ -36,8 +38,8 @@
           Import Excel
           <input id="importFile" type="file" accept=".xlsx,.xlsm">
         </label>
-        <button id="exportBtn" class="primary">Export Excel</button>
-        <button id="newProjectBtn">New Project</button>
+        <button id="exportBtn">Export Excel</button>
+        <button id="newProjectBtn" class="primary">New Project</button>
         <button id="logoutBtn">Logout</button>
       </div>
     </header>
@@ -103,6 +105,7 @@
 
     <section id="projects" class="view">
       <section class="project-totals" id="projectTotals"></section>
+      <div class="register-heading"><h2 id="registerTitle">Project register</h2><span id="registerCount"></span></div>
       <div class="table-wrap project-table-wrap">
         <table>
           <thead>
@@ -111,6 +114,8 @@
           <tbody id="projectRows"></tbody>
         </table>
       </div>
+      <div class="register-footer" id="registerFooter" aria-live="polite"></div>
+      <section id="projectMaterials" class="project-materials" aria-label="Material totals"></section>
     </section>
 
     <section id="analytics" class="view">
@@ -146,11 +151,11 @@
     </section>
   </main>
 
-  <dialog id="projectDialog">
+  <dialog id="projectDialog" aria-labelledby="dialogTitle">
     <form id="projectForm" method="dialog">
       <div class="dialog-head">
         <h2 id="dialogTitle">New Project</h2>
-        <button type="button" id="closeDialog" class="icon-btn">x</button>
+        <button type="button" id="closeDialog" class="icon-btn" aria-label="Close editor">&#215;</button>
       </div>
       <input type="hidden" id="projectDbId">
       <div class="form-grid">

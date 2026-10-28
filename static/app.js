@@ -253,7 +253,7 @@ function renderProjectTotals() {
   const materials = state.summary.materials || {};
   const costs = state.summary.costs || {};
   const poc = state.summary.poc || {};
-  const totals = [
+  let totals = [
     ['Filtered Rows', number(state.summary.total_projects)],
     ['MRC', formatCurrencyTotals('mrc')],
     ['NRC', formatCurrencyTotals('nrc')],
@@ -264,14 +264,22 @@ function renderProjectTotals() {
     ['Total Cost', money(costs.total_cost)],
   ];
   if (state.activeView === 'poc') {
-    totals.splice(1, 0, ['Expired', number(poc.expired)], ['Expiring Soon', number(poc.expiring_soon)], ['Active POCs', number(poc.active)]);
+    totals = [totals[0], ['Expired', number(poc.expired)], ['Expiring Soon', number(poc.expiring_soon)], ['Active POCs', number(poc.active)]];
+  } else {
+    totals = [totals[0], totals[1], totals[2], totals[7]];
   }
   $('#projectTotals').innerHTML = totals.map(([label, value]) => `
     <article class="total-chip">
       <span>${label}</span>
-      <strong>${escapeHtml(value)}</strong>
+      <strong>${String(value).split(' / ').map(part => `<span class="total-value">${escapeHtml(part)}</span>`).join('')}</strong>
     </article>
   `).join('');
+  $('#projectMaterials').innerHTML = state.activeView === 'poc' ? '' : [
+    ['9m poles', number(materials.poles_9m)],
+    ['11m poles', number(materials.poles_11m)],
+    ['ADSS', `${number(materials.planned_adss_distance_m)} m`],
+    ['Drop', `${number(materials.planned_drop_distance_m)} m`],
+  ].map(([label, value]) => `<div>${label}<strong>${escapeHtml(value)}</strong></div>`).join('');
 }
 
 function renderBars(selector, data, order = null, isMoney = false) {
@@ -342,7 +350,7 @@ function renderProjects() {
       <td>${escapeHtml(p.region || '')}</td>
       <td>${escapeHtml(p.service_type || '')}</td>
       <td>
-        <select class="status-select" data-status-id="${p.id}">
+        <select class="status-select" data-status="${escapeHtml(p.status)}" aria-label="Status for ${escapeHtml(p.customer_name)}" data-status-id="${p.id}">
           ${(state.options.statuses || []).map((status) => `<option value="${escapeHtml(status)}" ${status === p.status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}
         </select>
         ${p.is_delayed ? '<span class="delay-pill">Delayed</span>' : ''}
@@ -402,6 +410,9 @@ function projectColumnCount() {
 function renderProjectHeader() {
   $('.project-table-wrap table').classList.toggle('poc-table', state.activeView === 'poc');
   $('#projectHeaderRow').innerHTML = projectColumns().map((label) => `<th>${escapeHtml(label)}</th>`).join('');
+  $('#registerTitle').textContent = state.activeView === 'poc' ? 'POC register' : state.activeView === 'iclick' ? 'iKlick register' : 'Project register';
+  $('#registerCount').textContent = `${number(state.projects.length)} records`;
+  $('#registerFooter').textContent = `Showing ${number(Math.min(state.projects.length, 300))} of ${number(state.projects.length)} records`;
 }
 
 function pocTrackingCell(project) {
@@ -431,6 +442,7 @@ function switchView(view) {
   $$('.view').forEach((el) => el.classList.toggle('active', el.id === visibleView));
   $$('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
   $('#viewTitle').textContent = titles[view][0];
+  $('#workspaceView').textContent = titles[view][0];
   $('#viewSubtitle').textContent = titles[view][1];
   updateTopActions();
   if (workStreamByView[view]) {
@@ -449,7 +461,7 @@ function openProject(id = null) {
   $('#projectDbId').value = '';
   $('#deleteProject').style.visibility = id ? 'visible' : 'hidden';
   $('#duplicateProject').style.visibility = id ? 'visible' : 'hidden';
-  $('#dialogTitle').textContent = id ? `Edit ${newButtonLabels[state.activeView] || 'Project'}` : (newButtonLabels[state.activeView] || 'New Project');
+  $('#dialogTitle').textContent = id ? `Edit ${(newButtonLabels[state.activeView] || 'New Project').replace(/^New /, '')}` : (newButtonLabels[state.activeView] || 'New Project');
   if (id) {
     const project = state.projects.find((p) => p.id === id);
     $('#projectDbId').value = project.id;
