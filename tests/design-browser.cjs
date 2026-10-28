@@ -37,6 +37,16 @@ const server = http.createServer((req, res) => {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.locator('[data-view="projects"]').click();
     await page.locator('#projectRows tr[data-project-id]').first().waitFor();
+    assert.ok(await page.locator('#projectTotals').evaluate(el => el.getBoundingClientRect().bottom <= document.querySelector('.filters').getBoundingClientRect().top), 'Totals must appear above filters');
+    assert.equal(await page.locator('.nav-item svg').count(), 6, 'Navigation must include icons');
+    await page.locator('#moreFilters summary').click();
+    await page.locator('#fromFilter').fill('2026-10-01');
+    assert.equal(await page.locator('#fromFilter').inputValue(), '2026-10-01');
+    await page.locator('#scheduleColumns').check();
+    assert.ok(await page.locator('#projectHeaderRow th').nth(5).isVisible(), 'Scheduling columns must remain accessible');
+    await page.locator('#scheduleColumns').uncheck();
+    assert.equal(await page.locator('#projectHeaderRow th').nth(5).isVisible(), false);
+    await page.locator('#moreFilters summary').click();
     await page.locator('#projectRows tr[data-project-id]').first().dblclick();
     const dialog = page.locator('#projectDialog');
     await dialog.waitFor({ state: 'visible' });
@@ -61,6 +71,11 @@ const server = http.createServer((req, res) => {
     await page.locator('[data-poc-date-id]').first().waitFor();
     assert.equal(await page.locator('#projectHeaderRow th').count(), 9);
     await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(await page.locator('#logoutBtn').isVisible(), 'Logout must remain accessible on mobile');
+    await page.locator('#moreFilters summary').click();
+    const extra = await page.locator('.extra-filters').boundingBox();
+    assert.ok(extra.x >= 0 && extra.x + extra.width <= 390, 'More filters must fit on mobile');
+    await page.locator('#moreFilters summary').click();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile page must not overflow horizontally');
     await page.screenshot({ path: 'outputs/service-delivery-implemented-mobile.png', fullPage: true });
     await page.setViewportSize({ width: 800, height: 900 });

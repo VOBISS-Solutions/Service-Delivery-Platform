@@ -17,13 +17,14 @@
     </div>
     <div class="workspace-label">Workspace</div>
     <nav aria-label="Workspace">
-      <button class="nav-item active" data-view="dashboard">Dashboard</button>
-      <button class="nav-item" data-view="projects">Projects</button>
-      <button class="nav-item" data-view="iclick">iKlick</button>
-      <button class="nav-item" data-view="poc">POC / Temporary</button>
-      <button class="nav-item" data-view="analytics">Analytics</button>
-      <button class="nav-item" data-view="reports">Reports</button>
+      <button class="nav-item" data-view="projects"><i data-lucide="layers" aria-hidden="true"></i><span>Projects</span><span class="nav-count"></span></button>
+      <button class="nav-item" data-view="iclick"><i data-lucide="mouse-pointer-2" aria-hidden="true"></i><span>iKlick</span><span class="nav-count"></span></button>
+      <button class="nav-item" data-view="poc"><i data-lucide="timer" aria-hidden="true"></i><span>POC / Temporary</span><span class="nav-count"></span></button>
+      <button class="nav-item active" data-view="dashboard"><i data-lucide="layout-dashboard" aria-hidden="true"></i><span>Dashboard</span></button>
+      <button class="nav-item" data-view="analytics"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i><span>Analytics</span></button>
+      <button class="nav-item" data-view="reports"><i data-lucide="file-chart-column" aria-hidden="true"></i><span>Reports</span></button>
     </nav>
+    <div class="workspace-account"><span class="account-avatar" aria-hidden="true">VO</span><div>VOBISS operations<small>Service delivery workspace</small></div><button id="logoutBtn" title="Log out" aria-label="Log out"><i data-lucide="log-out" aria-hidden="true"></i></button></div>
   </aside>
 
   <main>
@@ -35,24 +36,27 @@
       </div>
       <div class="top-actions">
         <label class="import-btn">
-          Import Excel
+          <i data-lucide="upload" aria-hidden="true"></i>Import
           <input id="importFile" type="file" accept=".xlsx,.xlsm">
         </label>
-        <button id="exportBtn">Export Excel</button>
-        <button id="newProjectBtn" class="primary">New Project</button>
-        <button id="logoutBtn">Logout</button>
+        <button id="exportBtn"><i data-lucide="download" aria-hidden="true"></i>Export</button>
+        <button id="newProjectBtn" class="primary"><i data-lucide="plus" aria-hidden="true"></i><span>New project</span></button>
       </div>
     </header>
 
-    <section class="filters">
-      <input id="searchInput" placeholder="Search customer, site, remarks">
-      <div id="statusFilter" class="multi-filter" data-placeholder="All statuses"></div>
-      <div id="regionFilter" class="multi-filter" data-placeholder="All regions"></div>
-      <div id="serviceFilter" class="multi-filter" data-placeholder="All services"></div>
-      <div id="archiveFilter" class="multi-filter" data-placeholder="Active & archived"></div>
-      <input id="fromFilter" type="date" title="Confirmation date from">
-      <input id="toFilter" type="date" title="Confirmation date to">
-      <button id="clearFilters">Clear</button>
+    <div id="filterHome"></div>
+    <section class="filters" aria-label="Filters">
+      <label class="search-field"><i data-lucide="search" aria-hidden="true"></i><input id="searchInput" aria-label="Search customer, site or project" placeholder="Search customer, site or project..."></label>
+      <div id="statusFilter" class="multi-filter" data-placeholder="Status"></div>
+      <div id="regionFilter" class="multi-filter" data-placeholder="Region"></div>
+      <div id="serviceFilter" class="multi-filter" data-placeholder="Service"></div>
+      <details id="moreFilters"><summary>More filters</summary><div class="extra-filters">
+        <label>Records<div id="archiveFilter" class="multi-filter" data-placeholder="Active & archived"></div></label>
+        <label>Confirmed from<input id="fromFilter" type="date" title="Confirmation date from"></label>
+        <label>Confirmed to<input id="toFilter" type="date" title="Confirmation date to"></label>
+        <label class="schedule-toggle"><input id="scheduleColumns" type="checkbox">Show target date and age</label>
+      </div></details>
+      <button id="clearFilters">Clear filters</button>
     </section>
 
     <section id="dashboard" class="view active">
@@ -214,6 +218,7 @@
   </div>
 
   <div id="toast"></div>
+  <script src="/lucide.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

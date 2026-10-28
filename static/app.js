@@ -8,7 +8,7 @@ const state = {
 
 const titles = {
   dashboard: ['Dashboard', 'Live project health, revenue, materials, and aging.'],
-  projects: ['Projects', 'Fast searchable tracker for active and archived work.'],
+  projects: ['Projects', 'Delivery, from confirmation to completion.'],
   iclick: ['iKlick', 'Dedicated tracker for iKlick requests.'],
   poc: ['POC / Temporary', 'Temporary sites, trial periods, expiry flags, and follow-up status.'],
   analytics: ['Analytics', 'Aging, revenue, service mix, and planned materials.'],
@@ -220,7 +220,7 @@ function activeWorkStream() {
 
 function updateTopActions() {
   const button = $('#newProjectBtn');
-  button.textContent = newButtonLabels[state.activeView] || 'New Project';
+  button.querySelector('span').textContent = newButtonLabels[state.activeView] || 'New project';
 }
 
 function renderMetrics() {
@@ -254,24 +254,26 @@ function renderProjectTotals() {
   const costs = state.summary.costs || {};
   const poc = state.summary.poc || {};
   let totals = [
-    ['Filtered Rows', number(state.summary.total_projects)],
-    ['MRC', formatCurrencyTotals('mrc')],
-    ['NRC', formatCurrencyTotals('nrc')],
+    ['Projects', number(state.summary.total_projects)],
+    ['Monthly recurring', formatCurrencyTotals('mrc')],
+    ['Non-recurring', formatCurrencyTotals('nrc')],
     ['9m Poles', number(materials.poles_9m)],
     ['11m Poles', number(materials.poles_11m)],
     ['ADSS', number(materials.planned_adss_distance_m)],
     ['Drop', number(materials.planned_drop_distance_m)],
-    ['Total Cost', money(costs.total_cost)],
+    ['Delivery cost', money(costs.total_cost)],
   ];
   if (state.activeView === 'poc') {
     totals = [totals[0], ['Expired', number(poc.expired)], ['Expiring Soon', number(poc.expiring_soon)], ['Active POCs', number(poc.active)]];
   } else {
     totals = [totals[0], totals[1], totals[2], totals[7]];
   }
-  $('#projectTotals').innerHTML = totals.map(([label, value]) => `
+  $('#projectTotals').innerHTML = totals.map(([label, value], index) => `
     <article class="total-chip">
       <span>${label}</span>
       <strong>${String(value).split(' / ').map(part => `<span class="total-value">${escapeHtml(part)}</span>`).join('')}</strong>
+      ${state.activeView !== 'poc' && index === 0 ? `<small>${number(state.summary.completed_projects)} completed</small>` : ''}
+      ${state.activeView !== 'poc' && index === 3 ? '<small>Materials &amp; labour</small>' : ''}
     </article>
   `).join('');
   $('#projectMaterials').innerHTML = state.activeView === 'poc' ? '' : [
@@ -280,6 +282,11 @@ function renderProjectTotals() {
     ['ADSS', `${number(materials.planned_adss_distance_m)} m`],
     ['Drop', `${number(materials.planned_drop_distance_m)} m`],
   ].map(([label, value]) => `<div>${label}<strong>${escapeHtml(value)}</strong></div>`).join('');
+  const count = document.querySelector(`.nav-item[data-view="${state.activeView}"] .nav-count`);
+  if (count) {
+    count.textContent = number(state.summary.total_projects);
+    count.title = 'Records matching current filters';
+  }
 }
 
 function renderBars(selector, data, order = null, isMoney = false) {
@@ -372,7 +379,7 @@ function renderProjects() {
       <td>${number(p.planned_adss_distance_m)}</td>
       <td>${number(p.planned_drop_distance_m)}</td>
       <td><strong>${money(p.total_cost)}</strong><div class="muted">Labour ${money(p.labour_cost)}</div></td>
-      <td><button data-edit="${p.id}">Edit</button></td>
+      <td><button data-edit="${p.id}" class="row-edit" aria-label="Edit ${escapeHtml(p.customer_name)}" title="Edit project"><i data-lucide="square-pen" aria-hidden="true"></i></button></td>
       `}
     </tr>
   `).join('') || `<tr><td colspan="${projectColumnCount()}" class="muted">No projects match the current filters.</td></tr>`;
@@ -395,6 +402,7 @@ function renderProjects() {
     input.addEventListener('dblclick', (event) => event.stopPropagation());
     input.addEventListener('change', () => updateProjectPocDate(Number(input.dataset.pocDateId), input.dataset.pocDateField, input.value));
   });
+  lucide.createIcons();
 }
 
 function projectColumns() {
@@ -439,6 +447,9 @@ function renderReport() {
 function switchView(view) {
   state.activeView = view;
   const visibleView = workStreamByView[view] ? 'projects' : view;
+  const filters = $('.filters');
+  if (workStreamByView[view]) $('#projectTotals').after(filters);
+  else $('#filterHome').after(filters);
   $$('.view').forEach((el) => el.classList.toggle('active', el.id === visibleView));
   $$('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
   $('#viewTitle').textContent = titles[view][0];
@@ -663,6 +674,9 @@ function bindEvents() {
     ['#statusFilter', '#regionFilter', '#serviceFilter', '#archiveFilter'].forEach(clearMultiFilter);
     load();
   });
+  $('#scheduleColumns').addEventListener('change', (event) => {
+    document.body.classList.toggle('show-schedule', event.target.checked);
+  });
   document.addEventListener('click', () => closeMultiFilters());
   $$('[data-report]').forEach((btn) => btn.addEventListener('click', () => {
     state.activeReport = btn.dataset.report;
@@ -671,4 +685,5 @@ function bindEvents() {
 }
 
 bindEvents();
+lucide.createIcons();
 load().catch((error) => toast(error.message));

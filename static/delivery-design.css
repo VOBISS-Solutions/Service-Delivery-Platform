@@ -72,3 +72,32 @@ tbody tr[data-project-id]:hover{background:#f5faf8}
 @media(max-width:720px){body{display:block}.sidebar{display:block;height:auto;padding:16px;position:static;border-right:0;border-bottom:1px solid var(--line)}.brand{padding:0;margin:0;min-height:0}.brand strong{font-size:22px}.brand span,.workspace-label{display:none}nav{display:flex;gap:5px;overflow-x:auto;margin-top:15px}.nav-item{width:auto;flex:none;white-space:nowrap;min-height:36px;padding:8px 12px}main{padding:0 15px 20px}.workspace-bar{height:45px;margin:0 -15px 22px;padding:0 15px}.topbar{gap:16px}.top-actions>*{flex:none}.top-actions{justify-content:flex-start}.filters>.multi-filter{flex:1 1 130px}.filters>#searchInput{flex-basis:100%;max-width:none}.filters>input[type=date]{flex:1 1 130px}.total-chip{padding:0 14px}.total-chip strong{font-size:17px}.project-table-wrap{max-height:55dvh;min-height:250px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.material-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.form-grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:20px;gap:14px}.dialog-head{padding:20px}.dialog-actions{gap:6px;padding:14px}.dialog-actions>span{display:none}.bar-row{grid-template-columns:96px 1fr 42px}}
 @media(prefers-reduced-motion:reduce){button,#toast{transition:none}.spinner{animation-duration:1.5s}.progress-fill{animation:none;width:100%;opacity:.6}}
 @media(max-width:720px){.form-grid input,.form-grid select,.form-grid textarea,.filters input{font-size:16px}}
+
+/* Match the approved register layout while keeping advanced controls available. */
+.sidebar{display:flex;flex-direction:column}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px}
+[data-lucide],svg.lucide{width:17px;height:17px;flex:none;stroke-width:1.7}
+.nav-item>span:not(.nav-count){min-width:0}.nav-count{margin-left:auto;font-size:11px;color:var(--muted)}
+.workspace-account{margin-top:auto;padding:18px 0 0;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px;font-size:11px}
+.account-avatar{width:30px;height:30px;flex:none;border:1px solid var(--line);background:#edf0f3;border-radius:50%;display:grid;place-items:center;font-size:10px}
+.workspace-account small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+#logoutBtn{border:0;background:none;margin-left:auto;padding:0;width:25px;min-height:30px;flex:none;color:var(--muted)}
+.top-actions button,.import-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 13px}
+.total-chip strong{font-size:25px;line-height:1.3}.total-chip small{display:block;color:var(--muted);font-size:12px;margin-top:8px}.total-chip{min-height:82px}
+.filters{gap:8px;margin-bottom:18px}
+.search-field{display:flex;align-items:center;gap:9px;background:white;border:1px solid var(--line);border-radius:5px;padding:0 11px;flex:1 1 230px;max-width:320px;font-weight:400;min-width:0}
+.search-field input{border:0;border-radius:0;width:100%;padding:10px 0;min-width:0;min-height:38px;outline-offset:0}
+.filters>.multi-filter{flex:0 1 auto;min-width:0}.multi-filter-button{padding:0 12px;font-size:12px;min-height:40px}
+.multi-filter-button::after{content:'\2304';margin-left:14px;color:var(--muted)}
+#moreFilters{position:relative;font-size:12px}#moreFilters summary{cursor:pointer;list-style:none;color:var(--muted);padding:12px 8px}#moreFilters summary::after{content:'\2304';margin-left:8px}
+.extra-filters{position:absolute;top:100%;left:0;z-index:16;display:grid;gap:14px;width:260px;background:white;border:1px solid var(--line);border-radius:6px;padding:17px;box-shadow:0 8px 24px #23323d1a}
+.extra-filters label{font-size:12px;font-weight:400}.extra-filters .multi-filter-menu{position:static;width:100%;box-shadow:none;max-height:160px;margin-top:5px}
+.schedule-toggle{display:flex;align-items:center;gap:8px}.schedule-toggle input{width:16px;min-height:16px}
+.project-table-wrap table:not(.poc-table){min-width:1240px}
+body:not(.show-schedule) .project-table-wrap table:not(.poc-table) :is(th,td):nth-child(6),body:not(.show-schedule) .project-table-wrap table:not(.poc-table) :is(th,td):nth-child(7){display:none}
+body.show-schedule .project-table-wrap table:not(.poc-table){min-width:1460px}
+.row-edit{border:0;background:transparent;color:var(--muted);width:30px;padding:4px;min-height:30px}
+@media(max-width:1100px){.total-chip strong{font-size:22px}}
+@media(max-width:720px){.sidebar{display:block}.nav-item svg,.nav-count,.workspace-account{display:none}.search-field{flex-basis:100%;max-width:none}.filters>.multi-filter{flex:1 1 85px}.extra-filters{left:auto;right:0;max-width:calc(100vw - 30px)}.total-chip strong{font-size:20px}.total-chip{padding:0 14px}.top-actions{flex-wrap:wrap}}
+@media(max-width:720px){.workspace-account{display:flex;margin-top:12px;padding-top:10px}.workspace-account .account-avatar,.workspace-account small{display:none}}
+@media(max-width:720px){.filters{position:relative}#moreFilters{position:static}.extra-filters{left:0;right:auto;top:100%;width:min(300px,100%);max-width:100%}}
