@@ -31,12 +31,17 @@ const server = http.createServer((req, res) => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.locator('[data-view="projects"]').click();
     await page.locator('#projectRows tr[data-project-id]').first().waitFor();
+    assert.ok((await page.locator('#projectRows tr[data-project-id]').first().boundingBox()).height < 72, 'Register rows should remain compact');
+    assert.match(await page.locator('#projectTotals').textContent(), /GHS 2,500/);
+    assert.match(await page.locator('#projectTotals').textContent(), /USD 100/);
+    assert.match(await page.locator('#projectTotals').textContent(), /500/);
+    assert.equal(await page.locator('#projectHeaderRow th').filter({ hasText: 'Total Cost' }).count(), 1, 'Per-row cost column must remain');
     assert.ok(await page.locator('#projectTotals').evaluate(el => el.getBoundingClientRect().bottom <= document.querySelector('.filters').getBoundingClientRect().top), 'Totals must appear above filters');
     assert.equal(await page.locator('.nav-item svg').count(), 7, 'Navigation must include icons');
     await page.locator('#moreFilters summary').click();
@@ -47,16 +52,19 @@ const server = http.createServer((req, res) => {
     await page.locator('#scheduleColumns').uncheck();
     assert.equal(await page.locator('#projectHeaderRow th').nth(5).isVisible(), false);
     await page.locator('#moreFilters summary').click();
-    await page.locator('#projectRows tr[data-project-id]').first().dblclick();
+    await page.locator('#projectRows tr[data-project-id] td').first().dblclick();
     const dialog = page.locator('#projectDialog');
     await dialog.waitFor({ state: 'visible' });
     const box = await dialog.boundingBox();
-    assert.ok(Math.abs(box.x + box.width - 1440) < 2, 'Editor must align with the right edge');
+    assert.ok(Math.abs(box.x + box.width / 2 - 683) < 2, 'Editor must be centered');
+    for (const name of ['sn', 'parent_project_id', 'location', 'capacity', 'bandwidth', 'cpe', 'completion_date', 'labour', 'trench', 'remarks', 'archived']) {
+      assert.equal(await page.locator(`#projectForm [name="${name}"]`).count(), 1, `Existing editor field ${name} must be retained`);
+    }
     await page.locator('#cancelProject').click();
     await page.locator('[data-status-id="1"]').selectOption('Completed');
     await page.waitForFunction(() => document.querySelector('[data-status-id="1"]')?.disabled === false);
     assert.ok(writes.some(w => w.method === 'PUT' && w.body.status === 'Completed'), 'Status must save through the existing API');
-    await page.locator('#projectRows tr[data-project-id]').first().dblclick();
+    await page.locator('#projectRows tr[data-project-id] td').first().dblclick();
     await page.locator('#projectForm input[name="site_name"]').fill('Duplicate Site');
     await page.locator('#duplicateProject').click();
     await dialog.waitFor({ state: 'hidden' });
@@ -65,13 +73,26 @@ const server = http.createServer((req, res) => {
     const sticky = await page.locator('#projectHeaderRow th').first().boundingBox();
     const container = await page.locator('.project-table-wrap').boundingBox();
     assert.ok(Math.abs(sticky.y - container.y) < 3, 'Column headers must remain visible');
-    await page.locator('.project-table-wrap').evaluate(el => { el.scrollTop = 0; });
+    const firstColumnBefore = await page.locator('#projectRows td').first().boundingBox();
+    await page.locator('.project-table-wrap').evaluate(el => { el.scrollLeft = 500; });
+    const firstColumnAfter = await page.locator('#projectRows td').first().boundingBox();
+    assert.ok(Math.abs(firstColumnAfter.x - firstColumnBefore.x) < 2, 'Project identity must stay visible during horizontal scrolling');
+    const editBox = await page.locator('[data-edit="1"]').boundingBox();
+    assert.ok(editBox.x + editBox.width <= container.x + container.width, 'Edit action must stay visible');
+    await page.locator('.project-table-wrap').evaluate(el => { el.scrollTop = 0; el.scrollLeft = 0; });
     await page.screenshot({ path: 'outputs/service-delivery-implemented.png', fullPage: true });
     await page.locator('[data-view="poc"]').click();
     await page.locator('[data-poc-date-id]').first().waitFor();
     assert.equal(await page.locator('#projectHeaderRow th').count(), 9);
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#workspaceMenuBtn').click();
+    assert.equal(await page.locator('#workspaceMenuBtn').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('main').evaluate(el => el.inert), true, 'Drawer must isolate obscured content');
     assert.ok(await page.locator('#logoutBtn').isVisible(), 'Logout must remain accessible on mobile');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#workspaceMenuBtn').getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#workspaceSidebar').evaluate(el => el.inert), true, 'Closed mobile navigation must not receive keyboard focus');
+    assert.equal(await page.locator('main').evaluate(el => el.inert), false);
     await page.locator('#moreFilters summary').click();
     const extra = await page.locator('.extra-filters').boundingBox();
     assert.ok(extra.x >= 0 && extra.x + extra.width <= 390, 'More filters must fit on mobile');
@@ -79,9 +100,13 @@ const server = http.createServer((req, res) => {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile page must not overflow horizontally');
     await page.screenshot({ path: 'outputs/service-delivery-implemented-mobile.png', fullPage: true });
     await page.setViewportSize({ width: 800, height: 900 });
+    await page.locator('#workspaceMenuBtn').click();
     await page.locator('[data-view="analytics"]').click();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Tablet analytics must not overflow');
+    await page.setViewportSize({ width: 980, height: 900 });
+    const navLayout = await page.locator('.sidebar nav').evaluate(el => getComputedStyle(el).gridAutoFlow);
+    assert.equal(navLayout, 'row', 'Tablet sidebar must retain vertical navigation');
     assert.deepEqual(errors, []);
-    console.log('PASS: side editor, API status update, duplicate POST, sticky headers, POC columns, mobile overflow, browser errors');
+    console.log('PASS: compact register, centered full editor, API status update, duplicate POST, sticky headers/identity/actions, currency totals, POC columns, mobile menu, overflow, browser errors');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => server.close());

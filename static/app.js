@@ -431,6 +431,7 @@ function pocTrackingCell(project) {
 }
 
 function renderReport() {
+  $$('[data-report]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.report === state.activeReport)));
   const groups = {};
   state.projects.forEach((p) => {
     const key = p[state.activeReport] || 'Unassigned';
@@ -458,7 +459,11 @@ function switchView(view) {
   if (workStreamByView[view]) $('#projectTotals').after(filters);
   else $('#filterHome').after(filters);
   $$('.view').forEach((el) => el.classList.toggle('active', el.id === visibleView));
-  $$('.nav-item').forEach((el) => el.classList.toggle('active', el.dataset.view === view));
+  $$('.nav-item').forEach((el) => {
+    el.classList.toggle('active', el.dataset.view === view);
+    if (el.dataset.view === view) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
+  });
   $('#viewTitle').textContent = titles[view][0];
   $('#workspaceView').textContent = titles[view][0];
   $('#viewSubtitle').textContent = titles[view][1];
@@ -644,7 +649,9 @@ function exportExcel() {
 }
 
 function bindEvents() {
+  bindWorkspaceMenu();
   $$('.nav-item').forEach((btn) => btn.addEventListener('click', async () => {
+    setWorkspaceMenu(false, true);
     switchView(btn.dataset.view);
     if (btn.dataset.view !== 'special') await load();
   }));
@@ -689,6 +696,44 @@ function bindEvents() {
     state.activeReport = btn.dataset.report;
     renderReport();
   }));
+}
+
+function setWorkspaceMenu(open, returnFocus = false) {
+  const mobile = window.matchMedia('(max-width: 860px)').matches;
+  const expanded = mobile && open;
+  document.body.classList.toggle('sidebar-open', expanded);
+  $('#workspaceMenuBtn').setAttribute('aria-expanded', String(expanded));
+  $('#workspaceMenuBtn').setAttribute('aria-label', expanded ? 'Close navigation' : 'Open navigation');
+  $('#workspaceMenuBackdrop').hidden = !expanded;
+  $('#workspaceSidebar').inert = mobile && !expanded;
+  $('main').inert = expanded;
+  if (expanded) $('#closeWorkspaceMenu').focus();
+  else if (returnFocus && mobile) $('#workspaceMenuBtn').focus();
+}
+
+function bindWorkspaceMenu() {
+  $('#workspaceMenuBtn').addEventListener('click', () => setWorkspaceMenu(true));
+  $('#closeWorkspaceMenu').addEventListener('click', () => setWorkspaceMenu(false, true));
+  $('#workspaceMenuBackdrop').addEventListener('click', () => setWorkspaceMenu(false, true));
+  window.matchMedia('(max-width: 860px)').addEventListener('change', () => setWorkspaceMenu(false));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeMultiFilters();
+      if (document.body.classList.contains('sidebar-open')) setWorkspaceMenu(false, true);
+    }
+    if (event.key !== 'Tab' || !document.body.classList.contains('sidebar-open')) return;
+    const controls = $$('#workspaceSidebar button:not([disabled])');
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  setWorkspaceMenu(false);
 }
 
 bindEvents();

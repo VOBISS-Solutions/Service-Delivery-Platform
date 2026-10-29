@@ -8,7 +8,8 @@
   <link rel="stylesheet" href="/delivery-design.css">
 </head>
 <body>
-  <aside class="sidebar">
+  <aside class="sidebar" id="workspaceSidebar" aria-label="Primary navigation">
+    <button id="closeWorkspaceMenu" class="mobile-menu-close" aria-label="Close navigation"><i data-lucide="x" aria-hidden="true"></i></button>
     <div class="brand">
       <div>
         <strong>VOBISS</strong>
@@ -27,8 +28,10 @@
     </nav>
     <div class="workspace-account"><span class="account-avatar" aria-hidden="true">VO</span><div>VOBISS operations<small>Service delivery workspace</small></div><button id="logoutBtn" title="Log out" aria-label="Log out"><i data-lucide="log-out" aria-hidden="true"></i></button></div>
   </aside>
+  <button id="workspaceMenuBackdrop" class="workspace-menu-backdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
 
   <main>
+    <div class="mobile-workspace-bar"><button id="workspaceMenuBtn" aria-label="Open navigation" aria-controls="workspaceSidebar" aria-expanded="false"><i data-lucide="menu" aria-hidden="true"></i></button><strong>VOBISS</strong></div>
     <div class="workspace-bar">Workspace <span aria-hidden="true">/</span> <strong id="workspaceView">Dashboard</strong></div>
     <header class="topbar">
       <div>

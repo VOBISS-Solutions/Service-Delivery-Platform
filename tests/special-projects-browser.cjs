@@ -75,6 +75,11 @@ const server = http.createServer((req, res) => {
     await frame.locator('#search').fill('B-C');
     assert.equal(await frame.locator('#rows tr[data-link]').count(), 1);
     await frame.locator('#clear').click();
+    await page.setViewportSize({ width: 740, height: 390 });
+    const trackerMain = frame.locator('main');
+    await trackerMain.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    assert.ok((await frame.locator('.scroll').boundingBox()).height >= 180, 'Short-screen link table must not collapse');
+    await page.setViewportSize({ width: 1366, height: 768 });
     await frame.locator('#overviewTab').click();
     await page.screenshot({ path: 'outputs/special-projects-integrated.png', fullPage: true });
     rejectImport = true;
@@ -84,6 +89,7 @@ const server = http.createServer((req, res) => {
     assert.equal(imports, 2);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.ok(await frame.locator('body').evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await page.locator('#workspaceMenuBtn').click();
     await page.locator('[data-view="projects"]').click();
     assert.ok(await page.locator('#newProjectBtn').isVisible());
     assert.equal(await page.locator('#projectHeaderRow th').count(), 16);
