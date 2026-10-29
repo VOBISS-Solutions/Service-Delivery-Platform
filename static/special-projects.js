@@ -21,7 +21,7 @@ function choices(id) {
 
 function renderFilter(id, values) {
   const selected = choices(id);
-  $(`#${id}`).innerHTML = values.map(value => `<label><input type="checkbox" value="${escapeHtml(value)}" ${selected.includes(value) ? 'checked' : ''}>${escapeHtml(value)}</label>`).join('');
+  $(`#${id}`).innerHTML = values.map(value => `<label><input type="checkbox" value="${escapeHtml(value)}" ${selected.includes(value) ? 'checked' : ''}>${escapeHtml(value)}</label>`).join('') || '<p class="filter-empty">No values available until a workbook is imported.</p>';
   $(`#${id}`).onchange = render;
 }
 
@@ -120,7 +120,8 @@ async function loadSnapshot() {
   const snapshot = await response.json();
   data = snapshot.links;
   $('.source').textContent = snapshot.imported_at ? `Live sync not connected / Last imported ${new Date(snapshot.imported_at).toLocaleString()}` : 'SharePoint not connected / No workbook imported';
-  [['types', 'type'], ['priorities', 'priority'], ['teams', 'team']].forEach(([id, key]) => renderFilter(id, [...new Set(data.map(row => row[key]).filter(Boolean))].sort()));
+  const knownValues = { types: ['10G CSG', '100G ASG'], priorities: ['P1', 'P2'], teams: [] };
+  [['types', 'type'], ['priorities', 'priority'], ['teams', 'team']].forEach(([id, key]) => renderFilter(id, [...new Set([...knownValues[id], ...data.map(row => row[key]).filter(Boolean)])].sort()));
   renderFilter('statuses', statuses.filter(status => status !== 'N/A'));
   $('#loadError').hidden = true;
   render();

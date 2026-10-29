@@ -32,7 +32,7 @@ const server = http.createServer((req, res) => {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const browser = await chromium.launch({ channel: 'msedge', headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('dialog', dialog => { if (dialog.type() === 'confirm') dialog.accept(); else { errors.push('Unexpected dialog'); dialog.dismiss(); } });
@@ -41,11 +41,29 @@ const server = http.createServer((req, res) => {
     const frame = page.frameLocator('#specialProjectsFrame');
     await frame.locator('.source').filter({ hasText: 'No workbook imported' }).waitFor();
     assert.equal(await frame.locator('.metric strong').first().textContent(), '0');
+    assert.equal(await frame.locator('#types input').count(), 2, 'Known link types must be selectable before import');
+    assert.equal(await frame.locator('#priorities input').count(), 2, 'Known priorities must be selectable before import');
+    const stagesBox = await frame.locator('#stages').boundingBox();
+    const typesBox = await frame.locator('#typeSplit').boundingBox();
+    assert.ok(typesBox.x > stagesBox.x + stagesBox.width, 'Link types must remain beside Progress by stage at laptop width');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), 'Outer page must not add a second vertical scrollbar');
     assert.equal(await frame.locator('#scenario').count(), 0, 'Production must not expose sample scenarios');
     assert.equal(await page.locator('#newProjectBtn').isVisible(), false, 'Special Projects must not create BAU projects');
     await frame.locator('#specialImport').setInputFiles({ name: 'tracker.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('fixture') });
     await frame.locator('.source').filter({ hasText: 'Last imported' }).waitFor();
     assert.equal(await frame.locator('.metric strong').first().textContent(), '2');
+    await frame.locator('summary').filter({ hasText: /^Link type$/ }).click();
+    await frame.locator('#types input[value="100G ASG"]').check();
+    assert.equal(await frame.locator('.metric strong').first().textContent(), '0');
+    await frame.locator('#types input[value="10G CSG"]').check();
+    assert.equal(await frame.locator('.metric strong').first().textContent(), '2', 'Link type must support multi-select');
+    await frame.locator('#clear').click();
+    await frame.locator('summary').filter({ hasText: /^Priority$/ }).click();
+    await frame.locator('#priorities input[value="P2"]').check();
+    assert.equal(await frame.locator('.metric strong').first().textContent(), '0');
+    await frame.locator('#priorities input[value="P1"]').check();
+    assert.equal(await frame.locator('.metric strong').first().textContent(), '2', 'Priority must support multi-select');
+    await frame.locator('#clear').click();
     await frame.locator('#trackerTab').click();
     await frame.locator('#rows tr[data-link]').first().click();
     await frame.locator('#detail').waitFor({ state: 'visible' });

@@ -104,3 +104,9 @@ body.show-schedule .project-table-wrap table:not(.poc-table){min-width:1460px}
 .special-view .topbar,.special-view main>.filters{display:none}
 #specialProjectsFrame{display:block;width:100%;height:calc(100dvh - 110px);min-height:540px;border:0;background:var(--bg)}
 @media(max-width:720px){#specialProjectsFrame{height:calc(100dvh - 220px);min-height:600px}}
+.special-view{height:100dvh;overflow:hidden}
+.special-view main{display:flex;flex-direction:column;min-height:0;padding-bottom:0}
+.special-view .workspace-bar{flex-shrink:0}
+.special-view #special.active{display:flex;flex:1;min-height:0}
+.special-view #specialProjectsFrame{height:100%;min-height:0}
+@media(max-width:720px){.special-view{display:flex;flex-direction:column}.special-view .sidebar{flex-shrink:0}.special-view main{flex:1}}
