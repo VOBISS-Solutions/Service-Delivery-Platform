@@ -26,6 +26,7 @@ except ImportError:  # pragma: no cover - local SQLite mode does not need psycop
     dict_row = None
 
 import sqlite3
+import special_projects
 
 
 ROOT = Path(__file__).resolve().parent
@@ -1006,6 +1007,12 @@ class TrackerHandler(BaseHTTPRequestHandler):
             return json_response(self, summary(query))
         if path == "/api/options":
             return json_response(self, distinct_options())
+        if path == "/api/special-projects":
+            try:
+                return json_response(self, special_projects.read_snapshot(connect, sql))
+            except Exception:
+                self.log_error("Unable to load Special Projects snapshot")
+                return json_response(self, {"error": "Unable to load Special Projects"}, HTTPStatus.INTERNAL_SERVER_ERROR)
         if path == "/api/export":
             projects = get_projects(query)
             data = export_workbook(projects)
@@ -1048,6 +1055,22 @@ class TrackerHandler(BaseHTTPRequestHandler):
             return
         if not self.is_authenticated():
             return json_response(self, {"error": "Authentication required"}, HTTPStatus.UNAUTHORIZED)
+        if parsed.path == "/api/special-projects/import":
+            try:
+                origin = self.headers.get("Origin")
+                if origin and urlparse(origin).netloc != self.headers.get("Host"):
+                    return json_response(self, {"error": "Cross-site imports are not permitted"}, HTTPStatus.FORBIDDEN)
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0 or length > special_projects.MAX_COMPRESSED:
+                    self.close_connection = True
+                    return json_response(self, {"error": "Choose a nonempty XLSX workbook smaller than 20 MB"}, HTTPStatus.BAD_REQUEST)
+                snapshot = special_projects.import_snapshot(self.rfile.read(length), connect, sql)
+                return json_response(self, {"total_links": len(snapshot["links"]), "imported_at": snapshot["imported_at"]})
+            except ValueError as exc:
+                return json_response(self, {"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+            except Exception:
+                self.log_error("Unable to import Special Projects snapshot")
+                return json_response(self, {"error": "Import failed. The previous snapshot has been retained."}, HTTPStatus.INTERNAL_SERVER_ERROR)
         if parsed.path == "/api/projects":
             payload = self.read_json()
             try:
@@ -1213,6 +1236,7 @@ def main() -> None:
     if REQUIRE_DATABASE_URL and not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is required for this deployment")
     init_db()
+    special_projects.init_store(connect, sql)
     remove_demo_seed_data()
     migrate_project_statuses()
     port = int(os.environ.get("PORT", "8765"))

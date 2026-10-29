@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
     await page.locator('[data-view="projects"]').click();
     await page.locator('#projectRows tr[data-project-id]').first().waitFor();
     assert.ok(await page.locator('#projectTotals').evaluate(el => el.getBoundingClientRect().bottom <= document.querySelector('.filters').getBoundingClientRect().top), 'Totals must appear above filters');
-    assert.equal(await page.locator('.nav-item svg').count(), 6, 'Navigation must include icons');
+    assert.equal(await page.locator('.nav-item svg').count(), 7, 'Navigation must include icons');
     await page.locator('#moreFilters summary').click();
     await page.locator('#fromFilter').fill('2026-10-01');
     assert.equal(await page.locator('#fromFilter').inputValue(), '2026-10-01');

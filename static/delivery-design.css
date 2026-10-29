@@ -101,3 +101,6 @@ body.show-schedule .project-table-wrap table:not(.poc-table){min-width:1460px}
 @media(max-width:720px){.sidebar{display:block}.nav-item svg,.nav-count,.workspace-account{display:none}.search-field{flex-basis:100%;max-width:none}.filters>.multi-filter{flex:1 1 85px}.extra-filters{left:auto;right:0;max-width:calc(100vw - 30px)}.total-chip strong{font-size:20px}.total-chip{padding:0 14px}.top-actions{flex-wrap:wrap}}
 @media(max-width:720px){.workspace-account{display:flex;margin-top:12px;padding-top:10px}.workspace-account .account-avatar,.workspace-account small{display:none}}
 @media(max-width:720px){.filters{position:relative}#moreFilters{position:static}.extra-filters{left:0;right:auto;top:100%;width:min(300px,100%);max-width:100%}}
+.special-view .topbar,.special-view main>.filters{display:none}
+#specialProjectsFrame{display:block;width:100%;height:calc(100dvh - 110px);min-height:540px;border:0;background:var(--bg)}
+@media(max-width:720px){#specialProjectsFrame{height:calc(100dvh - 220px);min-height:600px}}

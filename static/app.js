@@ -11,6 +11,7 @@ const titles = {
   projects: ['Projects', 'Delivery, from confirmation to completion.'],
   iclick: ['iKlick', 'Dedicated tracker for iKlick requests.'],
   poc: ['POC / Temporary', 'Temporary sites, trial periods, expiry flags, and follow-up status.'],
+  special: ['Special Projects', 'Rollout progress, implementation stages and delivery blockers.'],
   analytics: ['Analytics', 'Aging, revenue, service mix, and planned materials.'],
   reports: ['Reports', 'Operational summaries for customers, regions, services, and status.'],
 };
@@ -446,6 +447,12 @@ function renderReport() {
 
 function switchView(view) {
   state.activeView = view;
+  document.body.classList.toggle('special-view', view === 'special');
+  if (view === 'special') {
+    const frame = $('#specialProjectsFrame');
+    if (!frame.getAttribute('src')) frame.src = frame.dataset.src;
+    else frame.contentWindow.postMessage({ type: 'refresh-special-projects' }, window.location.origin);
+  }
   const visibleView = workStreamByView[view] ? 'projects' : view;
   const filters = $('.filters');
   if (workStreamByView[view]) $('#projectTotals').after(filters);
@@ -639,7 +646,7 @@ function exportExcel() {
 function bindEvents() {
   $$('.nav-item').forEach((btn) => btn.addEventListener('click', async () => {
     switchView(btn.dataset.view);
-    await load();
+    if (btn.dataset.view !== 'special') await load();
   }));
   $('#newProjectBtn').addEventListener('click', async () => {
     if (!workStreamByView[state.activeView]) {

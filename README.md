@@ -74,6 +74,43 @@ DATABASE_URL=<Supabase Postgres connection string>
 
 ## Excel Import Notes
 
+## Special Projects
+
+The Special Projects tab contains the 4G Transport overview, link register,
+12-stage matrix, multi-select filters, and read-only link details. No example
+records are inserted into the database.
+
+Use **Import workbook** with an XLSX containing **Link Status Tracker**. Its
+header must appear within the first ten rows and include Link and all twelve
+stage columns. Stage values are Not Started, In Progress, Completed, Blocked,
+or N/A. The Summary sheet is not imported: the page calculates its summaries
+from link records using the workbook's rules. Completion excludes N/A stages;
+an entirely N/A link returns zero, matching Excel's IFERROR fallback. Blocked
+stages take precedence over other overall statuses.
+
+Imports replace the complete 4G Transport snapshot atomically. Repeat imports
+do not append duplicates. Duplicate link identities, invalid statuses, empty
+datasets, and invalid or oversized workbooks are rejected without replacing
+the previous snapshot. The snapshot is stored in `special_project_sources`,
+separate from ordinary Projects, iKlick, and POC records. The table is created
+at startup before requests are served; SQLite and PostgreSQL use the same API.
+
+SharePoint live synchronization is **not configured**. Browser access to the
+workbook does not establish server credentials. Sync now stays disabled;
+Open workbook opens the source. The page reports its last manual import and
+reloads the stored snapshot when revisited. Microsoft Graph access and a
+refresh schedule remain separate deployment work.
+
+Validation commands (browser tests require Playwright and installed Edge):
+
+```text
+python -m unittest discover -s tests -p "test_special*.py"
+node tests/special-projects-browser.cjs
+node tests/design-browser.cjs
+```
+
+### Ordinary Project Imports
+
 The importer accepts headers such as `Project ID`, `Customer Name`, `Site Name`,
 `Region`, `Service Type`, `Confirmation Date`, `Target Completion Date`,
 `Completion Date`, `Status`, `MRC`, `NRC`, `9m Poles`, `11m Poles`, `Labour`,
