@@ -28,6 +28,7 @@ MAX_UNCOMPRESSED = 40 * 1024 * 1024
 MAX_LINKS = 10000
 MAX_SCANNED_ROWS = 20000
 MAX_SCANNED_COLUMNS = 256
+IMPORT_LOCK_KEY = 73470401
 STAGE_NAMES = (
     'Cable Stringing', 'Cable Entry - Site A', 'Cable Entry - Site B',
     'Fiber Splicing', 'ODF Termination - Site A', 'ODF Termination - Site B',
@@ -235,21 +236,44 @@ def _parse_links(payload):
         wb.close()
 
 
-def import_snapshot(payload, connect, sql):
+def import_snapshot(payload, connect, sql, *, source='manual', filename=''):
     """Validate XLSX bytes and atomically replace source 4g; no partial imports.
 
     stages is a list of 12 canonical status strings in STAGE_NAMES order.
     connection='imported' denotes a manual snapshot, not a live connection.
     Database exceptions propagate; the connection context rolls back failed writes.
     """
-    links = _parse_links(payload)
-    timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-    snapshot = dict(_default(), imported_at=timestamp, connection='imported', links=links)
-    encoded = json.dumps(snapshot, ensure_ascii=True, allow_nan=False)
+    if source not in ('manual', 'power_automate') or not isinstance(filename, str):
+        raise ValueError('Invalid import source or filename')
+    if not isinstance(payload, bytes) or not payload:
+        raise ValueError('A nonempty XLSX byte payload is required')
+    content_hash = hashlib.sha256(payload).hexdigest()
+    automated = source == 'power_automate'
     with _connection(connect) as conn:
+        # Serialize all writers, including the first import with no source row yet.
+        if sql('SELECT ?') != 'SELECT ?':
+            conn.execute(sql('SELECT pg_advisory_xact_lock(?)'), (IMPORT_LOCK_KEY,))
+        else:
+            conn.execute('BEGIN IMMEDIATE')
+        row = conn.execute(sql('''SELECT snapshot_json FROM special_project_sources
+                                  WHERE source_key = ?'''), ('4g',)).fetchone()
+        previous = None
+        if row is not None:
+            previous = json.loads(row['snapshot_json'] if hasattr(row, 'keys') else row[0])
+        unchanged = automated and previous is not None and previous.get('content_sha256') == content_hash
+        links = previous['links'] if unchanged else _parse_links(payload)
+        timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        snapshot = dict(previous if unchanged else _default(),
+                        imported_at=previous['imported_at'] if unchanged else timestamp,
+                        connection='power_automate' if automated else 'imported',
+                        links=links, content_sha256=content_hash)
+        if automated:
+            snapshot = dict(snapshot, last_received_at=timestamp, source_filename=filename)
+        encoded = json.dumps(snapshot, ensure_ascii=True, allow_nan=False)
         conn.execute(sql('''INSERT INTO special_project_sources
             (source_key, snapshot_json, imported_at) VALUES (?, ?, ?)
             ON CONFLICT (source_key) DO UPDATE SET
                 snapshot_json = excluded.snapshot_json,
-                imported_at = excluded.imported_at'''), ('4g', encoded, timestamp))
-    return snapshot
+                imported_at = excluded.imported_at'''),
+                     ('4g', encoded, snapshot['imported_at']))
+    return dict(snapshot, unchanged=unchanged) if automated else snapshot

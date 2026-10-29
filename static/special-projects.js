@@ -119,7 +119,9 @@ async function loadSnapshot() {
   if (!response.ok) throw new Error('Unable to load Special Projects. Try refreshing the page.');
   const snapshot = await response.json();
   data = snapshot.links;
-  $('.source').textContent = snapshot.imported_at ? `Live sync not connected / Last imported ${new Date(snapshot.imported_at).toLocaleString()}` : 'SharePoint not connected / No workbook imported';
+  $('.source').textContent = snapshot.connection === 'power_automate'
+    ? `Power Automate / Last received ${new Date(snapshot.last_received_at).toLocaleString()}`
+    : snapshot.imported_at ? `Live sync not connected / Last imported ${new Date(snapshot.imported_at).toLocaleString()}` : 'SharePoint not connected / No workbook imported';
   const knownValues = { types: ['10G CSG', '100G ASG'], priorities: ['P1', 'P2'], teams: [] };
   [['types', 'type'], ['priorities', 'priority'], ['teams', 'team']].forEach(([id, key]) => renderFilter(id, [...new Set([...knownValues[id], ...data.map(row => row[key]).filter(Boolean)])].sort()));
   renderFilter('statuses', statuses.filter(status => status !== 'N/A'));
@@ -181,3 +183,6 @@ window.addEventListener('message', event => {
 document.addEventListener('click', event => $$('details.filter[open]').forEach(detail => { if (!detail.contains(event.target)) detail.open = false; }));
 render();
 loadSnapshot().catch(showError);
+setInterval(() => {
+  if (document.visibilityState === 'visible' && !importing && !$('#detail').open) loadSnapshot().catch(showError);
+}, 60000);

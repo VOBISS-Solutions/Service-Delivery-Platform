@@ -27,6 +27,7 @@ except ImportError:  # pragma: no cover - local SQLite mode does not need psycop
 
 import sqlite3
 import special_projects
+import integration_receiver
 
 
 ROOT = Path(__file__).resolve().parent
@@ -1027,6 +1028,8 @@ class TrackerHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == integration_receiver.UPLOAD_PATH:
+            return integration_receiver.receive_workbook(self, connect, sql, json_response)
         if parsed.path == "/api/login":
             payload = self.read_json()
             if payload.get("password") == APP_PASSWORD:

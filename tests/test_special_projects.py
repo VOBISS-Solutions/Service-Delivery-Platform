@@ -1,9 +1,13 @@
+import hashlib
 import io
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+from unittest.mock import MagicMock, patch
 from zipfile import ZipFile
 from xml.etree import ElementTree as ET
 
@@ -66,6 +70,125 @@ class SnapshotTests(unittest.TestCase):
 
     def read(self):
         return sp.read_snapshot(self.connect, self.sql)
+
+    def automated(self, payload, filename='tracker.xlsx'):
+        return sp.import_snapshot(payload, self.connect, self.sql,
+                                  source='power_automate', filename=filename)
+
+    def test_automated_retry_skips_parse_and_preserves_import_time(self):
+        payload = workbook([link()])
+        class Clock(datetime):
+            current = datetime(2026, 10, 29, tzinfo=timezone.utc)
+
+            @classmethod
+            def now(cls, tz=None):
+                return cls.current
+        with patch.object(sp, 'datetime', Clock):
+            first = self.automated(payload)
+            Clock.current = datetime(2026, 10, 30, tzinfo=timezone.utc)
+            with patch.object(sp, '_parse_links', side_effect=AssertionError('parsed retry')):
+                retry = self.automated(payload, 'retry.xlsx')
+        self.assertFalse(first['unchanged'])
+        self.assertTrue(retry['unchanged'])
+        self.assertEqual(retry['imported_at'], first['imported_at'])
+        self.assertGreater(retry['last_received_at'], first['last_received_at'])
+        self.assertEqual(retry['links'], first['links'])
+        self.assertEqual(retry['connection'], 'power_automate')
+        self.assertEqual(retry['source_filename'], 'retry.xlsx')
+        self.assertEqual(retry['content_sha256'], hashlib.sha256(payload).hexdigest())
+        self.assertEqual(self.read(), {k: v for k, v in retry.items() if k != 'unchanged'})
+
+    def test_changed_automated_import_and_manual_hash(self):
+        payload_a = workbook([link()])
+        payload_b = workbook([link(name='B-C')])
+        first = self.automated(payload_a)
+        changed = self.automated(payload_b)
+        self.assertFalse(changed['unchanged'])
+        self.assertNotEqual(changed['imported_at'], first['imported_at'])
+        manual = self.load(payload_b)
+        self.assertEqual(manual['connection'], 'imported')
+        self.assertEqual(manual['content_sha256'], hashlib.sha256(payload_b).hexdigest())
+        restored = self.automated(payload_a)
+        self.assertFalse(restored['unchanged'])
+        self.assertEqual(restored['links'], first['links'])
+
+    def test_automated_failures_preserve_all_metadata(self):
+        before = self.automated(workbook([link()]))
+        persisted = self.read()
+        for payload in (b'bad', workbook(), workbook([link(['bad'] * 12)])):
+            with self.assertRaises(ValueError):
+                self.automated(payload)
+            self.assertEqual(self.read(), persisted)
+        with self.connect() as conn:
+            self.assertEqual(conn.execute('SELECT imported_at FROM special_project_sources')
+                             .fetchone()[0], before['imported_at'])
+
+    def test_initial_parse_failure_rolls_back_transaction(self):
+        transactions = []
+        def connect():
+            conn = self.connect()
+            conn.set_trace_callback(transactions.append)
+            return conn
+        with self.assertRaises(ValueError):
+            sp.import_snapshot(b'bad', connect, self.sql, source='power_automate')
+        self.assertIn('BEGIN IMMEDIATE', transactions)
+        self.assertIn('ROLLBACK', transactions)
+        self.assertEqual(self.read()['connection'], 'not_configured')
+        self.assertFalse(self.automated(workbook([link()]))['unchanged'])
+
+    def test_concurrent_identical_imports_parse_once(self):
+        payload = workbook([link()])
+        entered = Event()
+        release = Event()
+        original = sp._parse_links
+
+        def parse(value):
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError('Import was not released')
+            return original(value)
+
+        with patch.object(sp, '_parse_links', side_effect=parse) as parser:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                first = pool.submit(self.automated, payload)
+                try:
+                    self.assertTrue(entered.wait(5))
+                    second = pool.submit(self.automated, payload)
+                finally:
+                    release.set()
+                results = [first.result(timeout=10), second.result(timeout=10)]
+            self.assertEqual(parser.call_count, 1)
+        self.assertEqual([r['unchanged'] for r in results], [False, True])
+        self.assertEqual(results[0]['imported_at'], results[1]['imported_at'])
+
+    def test_postgres_lock_is_inside_transaction_before_parse(self):
+        conn = MagicMock()
+        conn.execute.return_value.fetchone.return_value = None
+        adapter = lambda query: query.replace('?', '%s')
+
+        def parse(payload):
+            conn.__enter__.assert_called_once()
+            self.assertEqual(conn.execute.call_args_list[0].args,
+                             ('SELECT pg_advisory_xact_lock(%s)', (sp.IMPORT_LOCK_KEY,)))
+            raise ValueError('parse failed')
+
+        with patch.object(sp, '_parse_links', side_effect=parse):
+            with self.assertRaisesRegex(ValueError, 'parse failed'):
+                sp.import_snapshot(b'bad', lambda: conn, adapter, source='power_automate')
+        self.assertIs(conn.__exit__.call_args.args[0], ValueError)
+        conn.close.assert_called_once()
+        self.assertFalse(any('INSERT' in call.args[0] for call in conn.execute.call_args_list))
+
+    def test_failed_retry_write_preserves_receipt_metadata(self):
+        payload = workbook([link()])
+        self.automated(payload)
+        before = self.read()
+        with self.connect() as conn:
+            conn.execute('''CREATE TRIGGER fail_update BEFORE UPDATE ON special_project_sources
+                BEGIN SELECT RAISE(ABORT, 'test failure'); END''')
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.automated(payload, 'retry.xlsx')
+        self.assertEqual(self.read(), before)
 
     def test_default_and_empty_import(self):
         self.assertEqual(self.read(), dict(title='4G Transport', workbook_url=sp.WORKBOOK_URL,
