@@ -10,6 +10,25 @@ const groups = [['Fibre Works', 0, 7], ['Nokia Equipment', 7, 10], ['Service', 1
 const statuses = ['Not Started', 'In Progress', 'Completed', 'Blocked', 'N/A'];
 const statusClasses = { 'Not Started': 'notstarted', 'In Progress': 'progress', Completed: 'completed', Blocked: 'blocked', 'N/A': 'na' };
 let data = [], layout = 'list', view = 'overview', lastFocus = null, importing = false;
+const projectId = '4g-transport';
+const defaultFilename = '4G Transport link plan_19.10.26.xlsx';
+let hasSnapshot = false;
+// Keep the existing detail surface intact, including all import controls.
+const detailSurface = document.createElement('div');
+detailSurface.id = 'projectDetail';
+const content = $('.content');
+while (content.firstChild) detailSurface.append(content.firstChild);
+content.append($('#projectList'), detailSurface);
+const breadcrumb = document.createElement('nav');
+breadcrumb.className = 'breadcrumb';
+breadcrumb.setAttribute('aria-label', 'Breadcrumb');
+breadcrumb.innerHTML = '<a href="#projects">All Special Projects</a><span aria-hidden="true"> / </span><span aria-current="page">4G Transport</span>';
+detailSurface.prepend(breadcrumb);
+detailSurface.querySelector('h1').textContent = '4G Transport';
+detailSurface.querySelector('h1').tabIndex = -1;
+$('.project-line select').remove();
+// Errors remain visible on both routes, including an initial fetch failure.
+content.prepend($('#loadError'));
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const pct = value => `${(Number(value || 0) * 100).toFixed(value > 0 && value < .01 ? 1 : 0)}%`;
 const pill = status => `<span class="pill ${status.replaceAll(' ', '').replace('/', '')}">${escapeHtml(status)}</span>`;
@@ -95,12 +114,39 @@ function render() {
 }
 
 function setView(next) {
+  const hash = `#projects/${projectId}/${next}`;
+  if (location.hash !== hash) { location.hash = hash; return; }
   view = next;
   ['overview', 'tracker'].forEach(name => {
     $(`#${name}`).classList.toggle('hidden', name !== view);
     $(`#${name}Tab`).classList.toggle('active', name === view);
     $(`#${name}Tab`).setAttribute('aria-selected', String(name === view));
+    $(`#${name}Tab`).tabIndex = name === view ? 0 : -1;
   });
+}
+
+function route(focus = false) {
+  const wasDetail = !detailSurface.classList.contains('hidden');
+  const match = location.hash.match(/^#projects\/4g-transport\/(overview|tracker)$/);
+  const isDetail = Boolean(match);
+  $('#projectList').classList.toggle('hidden', isDetail);
+  detailSurface.classList.toggle('hidden', !isDetail);
+  if ($('#detail').open) $('#detail').close();
+  if (isDetail) setView(match[1]);
+  else {
+    $('#tracker').classList.add('hidden');
+    if (location.hash && location.hash !== '#projects') history.replaceState(null, '', '#projects');
+  }
+  document.title = isDetail ? `4G Transport - ${match[1] === 'tracker' ? 'Link Tracker' : 'Overview'}` : 'Special Projects';
+  if (focus && isDetail !== wasDetail) (isDetail ? detailSurface.querySelector('h1') : $('#openProject')).focus();
+}
+
+function renderProject(snapshot) {
+  $('#projectFilename').textContent = snapshot.source_filename || defaultFilename;
+  $('#projectSource').textContent = $('.source').textContent;
+  $('#projectTotal').textContent = String(data.length);
+  $('#projectProgress').textContent = data.length ? pct(average(data)) : 'Not available';
+  $('#projectListError').textContent = '';
 }
 
 function openLink(id) {
@@ -118,6 +164,7 @@ async function loadSnapshot() {
   if (response.status === 401) { window.top.location.href = '/login'; return; }
   if (!response.ok) throw new Error('Unable to load Special Projects. Try refreshing the page.');
   const snapshot = await response.json();
+  if (!Array.isArray(snapshot.links)) throw new Error('Unable to load Special Projects. Invalid snapshot received.');
   data = snapshot.links;
   $('.source').textContent = snapshot.connection === 'power_automate'
     ? `Power Automate / Last received ${new Date(snapshot.last_received_at).toLocaleString()}`
@@ -126,12 +173,20 @@ async function loadSnapshot() {
   [['types', 'type'], ['priorities', 'priority'], ['teams', 'team']].forEach(([id, key]) => renderFilter(id, [...new Set([...knownValues[id], ...data.map(row => row[key]).filter(Boolean)])].sort()));
   renderFilter('statuses', statuses.filter(status => status !== 'N/A'));
   $('#loadError').hidden = true;
+  hasSnapshot = true;
+  renderProject(snapshot);
   render();
 }
 
 function showError(error) {
   $('#loadError').hidden = false;
   $('#loadError').textContent = error.message;
+  $('#projectListError').textContent = hasSnapshot ? 'Showing the last loaded snapshot.' : 'Project data could not be loaded.';
+  if (!hasSnapshot) {
+    $('#projectTotal').textContent = 'Unavailable';
+    $('#projectProgress').textContent = 'Unavailable';
+    $('#projectSource').textContent = 'Source status unavailable';
+  }
 }
 
 async function importWorkbook(event) {
@@ -160,6 +215,14 @@ async function importWorkbook(event) {
 
 $('#overviewTab').onclick = () => setView('overview');
 $('#trackerTab').onclick = () => setView('tracker');
+$('.tabs').onkeydown = event => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const next = event.key === 'Home' ? 'overview' : event.key === 'End' ? 'tracker' : view === 'overview' ? 'tracker' : 'overview';
+  setView(next);
+  $(`#${next}Tab`).focus();
+};
+window.addEventListener('hashchange', () => route(true));
 ['list', 'matrix'].forEach(name => {
   $(`#${name}View`).onclick = () => {
     layout = name;
@@ -181,6 +244,7 @@ window.addEventListener('message', event => {
   }
 });
 document.addEventListener('click', event => $$('details.filter[open]').forEach(detail => { if (!detail.contains(event.target)) detail.open = false; }));
+route();
 render();
 loadSnapshot().catch(showError);
 setInterval(() => {

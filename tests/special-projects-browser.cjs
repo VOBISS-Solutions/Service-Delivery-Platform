@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 const root = path.join(__dirname, '..', 'static');
 const stageRows = [Array(12).fill('Completed'), ['Blocked', ...Array(11).fill('Not Started')]];
 const links = stageRows.map((stages, i) => ({ id: String(i + 1), link: i ? 'B-C' : '<img src=x onerror=alert(1)>', a: 'A', b: 'B', type: '10G CSG', priority: 'P1', team: 'Test Team', fiber: 'New fibre', stages, status: i ? 'Blocked' : 'Completed', fraction: i ? 0 : 1, issue: i ? 'Awaiting access' : '', remarks: '<script>invalid()</script>', updated: '2026-10-29' }));
-let imported = false, rejectImport = false, imports = 0;
+let imported = false, rejectImport = false, imports = 0, rejectSnapshot = false, automated = false;
 const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/')) {
     req.resume();
@@ -17,7 +17,10 @@ const server = http.createServer((req, res) => {
         if (rejectImport) { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid workbook. Previous snapshot retained.' })); return; }
         imported = true; res.end(JSON.stringify({ total_links: links.length })); return;
       }
-      if (req.url === '/api/special-projects') { res.end(JSON.stringify({ links: imported ? links : [], imported_at: imported ? '2026-10-29T10:00:00+00:00' : null })); return; }
+      if (req.url === '/api/special-projects') {
+        if (rejectSnapshot) { res.writeHead(503); res.end('{}'); return; }
+        res.end(JSON.stringify({ links: imported ? links : [], imported_at: imported ? '2026-10-29T10:00:00+00:00' : null, source_filename: imported ? 'tracker.xlsx' : null, connection: automated ? 'power_automate' : 'not_configured', last_received_at: automated ? '2026-10-30T11:00:00Z' : null })); return;
+      }
       const result = req.url.startsWith('/api/projects') ? { projects: [] } : req.url.startsWith('/api/options') ? { statuses: ['Completed'] } : {};
       res.end(JSON.stringify(result));
     });
@@ -39,6 +42,21 @@ const server = http.createServer((req, res) => {
     await page.goto(`http://127.0.0.1:${server.address().port}`);
     await page.locator('[data-view="special"]').click();
     const frame = page.frameLocator('#specialProjectsFrame');
+    await frame.locator('#projectList').waitFor();
+    await frame.locator('#projectSource').filter({ hasText: 'No workbook imported' }).waitFor();
+    assert.equal(await frame.locator('#projectFilename').textContent(), '4G Transport link plan_19.10.26.xlsx');
+    assert.equal(await frame.locator('#projectTotal').textContent(), '0');
+    assert.equal(await frame.locator('#projectDetail').isVisible(), false);
+    await frame.getByRole('link', { name: '4G Transport', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await frame.locator('#projectDetail').waitFor();
+    await frame.locator('#overviewTab').focus();
+    await page.keyboard.press('ArrowRight');
+    await frame.locator('#tracker').waitFor();
+    assert.equal(await frame.locator('#trackerTab').evaluate(el => document.activeElement === el), true, 'Hash navigation must preserve keyboard tab focus');
+    await page.keyboard.press('ArrowLeft');
+    await frame.locator('#overview').waitFor();
+    assert.equal(await frame.locator('#overviewTab').evaluate(el => document.activeElement === el), true);
     await frame.locator('.source').filter({ hasText: 'No workbook imported' }).waitFor();
     assert.equal(await frame.locator('.metric strong').first().textContent(), '0');
     assert.equal(await frame.locator('#types input').count(), 2, 'Known link types must be selectable before import');
@@ -52,6 +70,14 @@ const server = http.createServer((req, res) => {
     await frame.locator('#specialImport').setInputFiles({ name: 'tracker.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('fixture') });
     await frame.locator('.source').filter({ hasText: 'Last imported' }).waitFor();
     assert.equal(await frame.locator('.metric strong').first().textContent(), '2');
+    await frame.getByRole('link', { name: 'All Special Projects' }).click();
+    await frame.locator('#projectList').waitFor();
+    assert.equal(await frame.locator('#projectFilename').textContent(), 'tracker.xlsx');
+    assert.equal(await frame.locator('#projectTotal').textContent(), '2');
+    assert.equal(await frame.locator('#projectProgress').textContent(), '50%');
+    assert.match(await frame.locator('#projectSource').textContent(), /Last imported/);
+    await page.screenshot({ path: 'outputs/special-projects-landing.png', fullPage: true });
+    await frame.getByRole('link', { name: '4G Transport', exact: true }).click();
     await frame.locator('summary').filter({ hasText: /^Link type$/ }).click();
     await frame.locator('#types input[value="100G ASG"]').check();
     assert.equal(await frame.locator('.metric strong').first().textContent(), '0');
@@ -65,6 +91,7 @@ const server = http.createServer((req, res) => {
     assert.equal(await frame.locator('.metric strong').first().textContent(), '2', 'Priority must support multi-select');
     await frame.locator('#clear').click();
     await frame.locator('#trackerTab').click();
+    assert.ok((await frame.locator('body').evaluate(() => location.hash)).endsWith('/tracker'));
     await frame.locator('#rows tr[data-link]').first().click();
     await frame.locator('#detail').waitFor({ state: 'visible' });
     assert.equal(await frame.locator('.detail-stage').count(), 12);
@@ -89,6 +116,35 @@ const server = http.createServer((req, res) => {
     assert.equal(imports, 2);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.ok(await frame.locator('body').evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await frame.getByRole('link', { name: 'All Special Projects' }).click();
+    await frame.locator('#projectList').waitFor();
+    await page.screenshot({ path: 'outputs/special-projects-landing-mobile.png', fullPage: true });
+    assert.ok(await frame.locator('body').evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    const direct = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    const base = `http://127.0.0.1:${server.address().port}/special-projects.html`;
+    automated = true;
+    await direct.goto(`${base}#projects/4g-transport/tracker`);
+    await direct.locator('#projectSource').filter({ hasText: 'Last received' }).waitFor({ state: 'attached' });
+    await direct.locator('#tracker').waitFor();
+    await direct.reload();
+    await direct.locator('#tracker').waitFor();
+    await direct.getByRole('link', { name: 'All Special Projects' }).click();
+    await direct.locator('#projectList').waitFor();
+    assert.match(await direct.locator('#projectSource').textContent(), /Power Automate \/ Last received/);
+    await direct.screenshot({ path: 'outputs/special-projects-landing-mobile.png', fullPage: true });
+    await direct.goBack();
+    await direct.locator('#tracker').waitFor();
+    await direct.goForward();
+    await direct.locator('#projectList').waitFor();
+    rejectSnapshot = true;
+    await direct.reload();
+    await direct.locator('#loadError').waitFor();
+    assert.equal(await direct.locator('#projectTotal').textContent(), 'Unavailable');
+    await direct.screenshot({ path: 'outputs/special-projects-error-mobile.png', fullPage: true });
+    rejectSnapshot = false;
+    await direct.goto(`${base}#projects/unknown`);
+    await direct.locator('#projectList').waitFor();
+    await direct.close();
     await page.locator('#workspaceMenuBtn').click();
     await page.locator('[data-view="projects"]').click();
     assert.ok(await page.locator('#newProjectBtn').isVisible());

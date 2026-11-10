@@ -53,6 +53,22 @@ class PowerAutomateTests(api_tests.SpecialProjectAPITests):
         self.assertEqual(self.request('GET', '/api/special-projects', headers=self.headers())[0], 401)
         self.assertEqual(self.request('POST', '/api/projects', b'{}', self.headers())[0], 401)
 
+    def test_project_navigation_reads_preserve_automated_source(self):
+        self.assertEqual(self.request('POST', ROUTE, api_tests.payload(), self.headers())[0], 200)
+        before = sp.read_snapshot(app.connect, app.sql)
+        self.login()
+        for _ in range(3):
+            status, _, content = self.request('GET', '/api/special-projects')
+            self.assertEqual(status, 200)
+            snapshot = json.loads(content)
+            self.assertEqual(snapshot, before)
+            self.assertEqual(snapshot['title'], '4G Transport')
+            self.assertEqual(snapshot['source_filename'], FILENAME)
+            self.assertEqual(snapshot['connection'], 'power_automate')
+            self.assertTrue(snapshot['last_received_at'])
+        self.assertEqual(app.get_projects({}), [])
+        self.assertEqual(sp.read_snapshot(app.connect, app.sql), before)
+
     def test_configuration_and_bad_keys(self):
         for key in ('', 'short'):
             with patch.dict(os.environ, {'SPECIAL_PROJECTS_INTEGRATION_KEY': key}):

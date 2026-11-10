@@ -76,8 +76,12 @@ DATABASE_URL=<Supabase Postgres connection string>
 
 ## Special Projects
 
-The Special Projects tab contains the 4G Transport overview, link register,
-12-stage matrix, multi-select filters, and read-only link details. No example
+The Special Projects tab opens a project list with workbook, synchronization,
+link-count, and completion information. Open 4G Transport to access its overview,
+link register, 12-stage matrix, multi-select filters, and read-only link details.
+Use All Special Projects to return to the list. This first phase retains the
+existing single 4G Transport source and Power Automate endpoint; creating other
+projects and application-only custom columns are not yet implemented. No example
 records are inserted into the database.
 
 Use **Import workbook** with an XLSX containing **Link Status Tracker**. Its
